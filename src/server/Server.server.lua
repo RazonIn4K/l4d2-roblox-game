@@ -39,6 +39,9 @@ local function setupRemotes()
 		"RevivePlayer",
 		"UseItem",
 		"AttemptRescue",
+		"FireWeapon",
+		"FireResult",
+		"AmmoUpdate",
 	}
 
 	for _, name in remoteNames do
@@ -203,6 +206,7 @@ local function initializeServices()
 	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	local PlayerService = require(Services:WaitForChild("PlayerService") :: any)
 	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
+	local WeaponService = require(Services:WaitForChild("WeaponService") :: any)
 
 	-- Start services in order
 	print("[Server] Starting services...")
@@ -211,6 +215,7 @@ local function initializeServices()
 	PlayerService:Get():Start()
 	SpawnPointService:Get():Start()  -- Must start before DirectorService
 	EntityService:Get():Start()
+	WeaponService:Get():Start()
 	DirectorService:Get():Start()
 
 	print("[Server] All services started successfully")

@@ -8,8 +8,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
 
 local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
 -- Constants
 local RESCUE_RANGE = 4  -- Must match server
@@ -17,6 +19,160 @@ local RESCUE_RANGE = 4  -- Must match server
 -- State
 local rescuePrompt: BillboardGui? = nil
 local nearbyPinnedPlayer: Player? = nil
+local currentAmmo = { magazine = 15, reserve = math.huge, weapon = "Pistol" }
+local ammoLabel: TextLabel? = nil
+
+-- ============================================
+-- AMMO DISPLAY UI
+-- ============================================
+
+local function createAmmoDisplay(): TextLabel
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "WeaponHUD"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = player:WaitForChild("PlayerGui")
+	
+	local ammoFrame = Instance.new("Frame")
+	ammoFrame.Name = "AmmoFrame"
+	ammoFrame.Size = UDim2.new(0, 200, 0, 60)
+	ammoFrame.Position = UDim2.new(1, -220, 1, -80)
+	ammoFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	ammoFrame.BackgroundTransparency = 0.5
+	ammoFrame.BorderSizePixel = 0
+	ammoFrame.Parent = screenGui
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = ammoFrame
+	
+	local label = Instance.new("TextLabel")
+	label.Name = "AmmoText"
+	label.Size = UDim2.new(1, -20, 1, 0)
+	label.Position = UDim2.new(0, 10, 0, 0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextSize = 24
+	label.Font = Enum.Font.GothamBold
+	label.TextXAlignment = Enum.TextXAlignment.Right
+	label.Text = "15 / ∞"
+	label.Parent = ammoFrame
+	
+	return label
+end
+
+local function updateAmmoDisplay()
+	if not ammoLabel then
+		ammoLabel = createAmmoDisplay()
+	end
+	
+	local reserveText = currentAmmo.reserve == math.huge and "∞" or tostring(currentAmmo.reserve)
+	ammoLabel.Text = string.format("%d / %s", currentAmmo.magazine, reserveText)
+end
+
+-- ============================================
+-- MUZZLE FLASH EFFECT
+-- ============================================
+
+local function createMuzzleFlash()
+	local character = player.Character
+	if not character then return end
+	
+	-- Find right arm or hand for muzzle position
+	local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand")
+	if not rightArm then return end
+	
+	-- Create flash part
+	local flash = Instance.new("Part")
+	flash.Name = "MuzzleFlash"
+	flash.Size = Vector3.new(0.5, 0.5, 1)
+	flash.Material = Enum.Material.Neon
+	flash.BrickColor = BrickColor.new("Bright yellow")
+	flash.Anchored = true
+	flash.CanCollide = false
+	flash.CastShadow = false
+	flash.CFrame = rightArm.CFrame * CFrame.new(0, 0, -1.5)
+	flash.Parent = workspace
+	
+	-- Add point light
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 200, 100)
+	light.Brightness = 3
+	light.Range = 10
+	light.Parent = flash
+	
+	-- Remove after short duration
+	Debris:AddItem(flash, 0.05)
+end
+
+-- ============================================
+-- GUNSHOT SOUND
+-- ============================================
+
+local function playGunshotSound()
+	local character = player.Character
+	if not character then return end
+	
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://131070686"  -- Placeholder gunshot sound
+	sound.Volume = 0.5
+	sound.PlaybackSpeed = 1 + (math.random() - 0.5) * 0.1  -- Slight variation
+	sound.Parent = hrp
+	sound:Play()
+	
+	Debris:AddItem(sound, 1)
+end
+
+-- ============================================
+-- SHOOTING SYSTEM
+-- ============================================
+
+local function getTargetPosition(): Vector3?
+	local mouse = player:GetMouse()
+	if not mouse then return nil end
+	
+	-- Raycast from camera
+	local origin = camera.CFrame.Position
+	local direction = (mouse.Hit.Position - origin).Unit * 1000
+	
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { player.Character }
+	
+	local result = workspace:Raycast(origin, direction, rayParams)
+	
+	if result then
+		return result.Position
+	else
+		return origin + direction
+	end
+end
+
+local function fireWeapon()
+	-- Check if we have ammo (client-side prediction)
+	if currentAmmo.magazine <= 0 then
+		-- Play empty click sound
+		return
+	end
+	
+	local targetPosition = getTargetPosition()
+	if not targetPosition then return end
+	
+	-- Visual effects (immediate feedback)
+	createMuzzleFlash()
+	playGunshotSound()
+	
+	-- Client-side ammo prediction
+	currentAmmo.magazine -= 1
+	updateAmmoDisplay()
+	
+	-- Send to server
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	local fireWeaponRemote = remotes:WaitForChild("FireWeapon")
+	fireWeaponRemote:FireServer(targetPosition)
+end
 
 -- Create rescue prompt UI
 local function createRescuePrompt(): BillboardGui
@@ -163,14 +319,45 @@ attemptRescueRemote.OnClientEvent:Connect(function(success: boolean, message: st
 	end
 end)
 
+-- Ammo update remote
+local ammoUpdateRemote = remotes:WaitForChild("AmmoUpdate")
+ammoUpdateRemote.OnClientEvent:Connect(function(ammoData)
+	if ammoData then
+		currentAmmo.magazine = ammoData.magazine or currentAmmo.magazine
+		currentAmmo.reserve = ammoData.reserve or currentAmmo.reserve
+		currentAmmo.weapon = ammoData.weapon or currentAmmo.weapon
+		updateAmmoDisplay()
+	end
+end)
+
+-- Fire result remote
+local fireResultRemote = remotes:WaitForChild("FireResult")
+fireResultRemote.OnClientEvent:Connect(function(success: boolean, result: string, hitData)
+	if success then
+		if result == "Hit" then
+			print("[Client] Hit target!")
+		end
+	else
+		if result == "NoAmmo" then
+			print("[Client] Out of ammo!")
+		end
+	end
+end)
+
 -- Update loop for rescue prompt
 RunService.Heartbeat:Connect(function()
 	updateRescuePrompt()
 end)
 
--- Input handling
+-- Mouse click for shooting
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then
+		return
+	end
+
+	-- Left mouse button for shooting
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		fireWeapon()
 		return
 	end
 
@@ -191,5 +378,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		-- TODO: Toggle flashlight
 	end
 end)
+
+-- Initialize ammo display
+updateAmmoDisplay()
 
 print("[Client] Initialized")
