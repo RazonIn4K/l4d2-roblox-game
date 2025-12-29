@@ -90,8 +90,8 @@ end
 
 function DirectorService:ConnectGameEvents()
 	-- Get GameService reference
-	local Services = script.Parent
-	local GameService = require(Services:WaitForChild("GameService"))
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
 
 	-- Listen for game state changes
 	GameService:Get().OnStateChanged.Event:Connect(function(oldState, newState)
@@ -223,8 +223,8 @@ end
 
 function DirectorService:UpdateCombatStatus()
 	-- Check if any enemies are near players
-	local Services = script.Parent
-	local EntityService = require(Services:WaitForChild("EntityService"))
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 
 	self._inCombat = false
 
@@ -244,7 +244,7 @@ function DirectorService:UpdateCombatStatus()
 				continue
 			end
 
-			local distance = (entity.rootPart.Position - hrp.Position).Magnitude
+			local distance = ((entity.rootPart :: BasePart).Position - hrp.Position).Magnitude
 			if distance < CONFIG.combatRadius then
 				self._inCombat = true
 				return
@@ -300,8 +300,8 @@ function DirectorService:SpawnCommonWave()
 	end
 	
 	-- Get EntityService
-	local Services = script.Parent
-	local EntityService = require(Services:WaitForChild("EntityService"))
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	
 	-- Create zombie model if needed
 	local zombieModel = self:GetOrCreateZombieModel()
@@ -317,7 +317,7 @@ function DirectorService:SpawnCommonWave()
 	-- Spawn zombies at random valid points
 	for i = 1, waveSize do
 		local spawnIndex = math.random(1, #validSpawns)
-		local spawnPoint = validSpawns[spawnIndex] :: BasePart
+		local spawnPoint = validSpawns[spawnIndex]
 		
 		-- Remove from list to avoid multiple spawns at same point
 		table.remove(validSpawns, spawnIndex)
@@ -337,8 +337,8 @@ end
 
 function DirectorService:SpawnSpecial(specialType: string)
 	-- Get EntityService
-	local Services = script.Parent
-	local EntityService = require(Services:WaitForChild("EntityService"))
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	
 	-- Find valid spawn points (prefer further away for specials)
 	local validSpawns = self:GetValidSpawnPoints()
@@ -355,15 +355,15 @@ function DirectorService:SpawnSpecial(specialType: string)
 	end
 	
 	-- Spawn at furthest valid point
-	local spawnPoint = validSpawns[1] :: BasePart
+	local spawnPoint = validSpawns[1]
 	if #validSpawns > 1 then
 		-- Prefer spawn points further from players for specials
 		local bestScore = -math.huge
 		for _, point in validSpawns do
-			local score = self:GetSpawnPointScore(point :: BasePart)
+			local score = self:GetSpawnPointScore(point)
 			if score > bestScore then
 				bestScore = score
-				spawnPoint = point :: BasePart
+				spawnPoint = point
 			end
 		end
 	end
@@ -413,7 +413,7 @@ function DirectorService:FindSpawnPoints()
 	print(string.format("[Director] Found %d spawn points", #spawnPoints))
 end
 
-function DirectorService:GetValidSpawnPoints(): {Instance}
+function DirectorService:GetValidSpawnPoints(): {BasePart}
 	local validSpawns = {}
 	local now = os.clock()
 	
@@ -423,7 +423,7 @@ function DirectorService:GetValidSpawnPoints(): {Instance}
 		end
 		
 		-- Check if spawn point is in player line of sight
-		if not self:IsSpawnPointVisible(spawnPoint :: BasePart) then
+		if not self:IsSpawnPointVisible(spawnPoint) then
 			table.insert(validSpawns, spawnPoint)
 		end
 	end

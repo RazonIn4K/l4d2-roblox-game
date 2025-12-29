@@ -94,17 +94,17 @@ end
 -- Initialize services
 local function initializeServices()
 	local Server = script.Parent :: Instance
-	local Services = Server:WaitForChild("Services")
+	local Services = Server:WaitForChild("Services") :: Instance
 	if not Services then
 		error("Services folder not found!")
 		return
 	end
 
 	-- Import services
-	local GameService = require(Services:WaitForChild("GameService"))
-	local DirectorService = require(Services:WaitForChild("DirectorService"))
-	local EntityService = require(Services:WaitForChild("EntityService"))
-	local PlayerService = require(Services:WaitForChild("PlayerService"))
+	local GameService = require(Services:WaitForChild("GameService") :: any)
+	local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+	local PlayerService = require(Services:WaitForChild("PlayerService") :: any)
 
 	-- Start services in order
 	print("[Server] Starting services...")
