@@ -93,13 +93,13 @@ end
 
 -- Initialize services
 local function initializeServices()
-	local Services = ServerScriptService.Server.Services
+	local Services = script.Parent:WaitForChild("Services") :: Folder
 
 	-- Import services
-	local GameService = require(Services.GameService)
-	local DirectorService = require(Services.DirectorService)
-	local EntityService = require(Services.EntityService)
-	local PlayerService = require(Services.PlayerService)
+	local GameService = require(Services:WaitForChild("GameService") :: ModuleScript)
+	local DirectorService = require(Services:WaitForChild("DirectorService") :: ModuleScript)
+	local EntityService = require(Services:WaitForChild("EntityService") :: ModuleScript)
+	local PlayerService = require(Services:WaitForChild("PlayerService") :: ModuleScript)
 
 	-- Start services in order
 	print("[Server] Starting services...")

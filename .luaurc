@@ -1,53 +1,8 @@
 {
-  "workspace": {
-    "library": {
-      "include": "lua_modules",
+  "languageServer": {
+    "workspace": {
+      "library": ["lua_modules"],
       "rojo": "default.project.json"
     }
-  },
-  "diagnostics": {
-    "enable": true,
-    "globals": [
-      "game",
-      "workspace",
-      "script",
-      "script.Parent",
-      "workspace",
-      "Enum",
-      "Vector3",
-      "CFrame",
-      "UDim2",
-      "UDim",
-      "Color3",
-      "BrickColor",
-      "Instance",
-      "Humanoid",
-      "Part",
-      "Model",
-      "Folder",
-      "RemoteEvent",
-      "RemoteFunction",
-      "BindableEvent",
-      "BindableFunction",
-      "RunService",
-      "Players",
-      "ServerScriptService",
-      "ReplicatedStorage",
-      "StarterPlayer",
-      "StarterPlayerScripts",
-      "ServerStorage",
-      "Lighting",
-      "SoundService",
-      "PhysicsService",
-      "Debris",
-      "RaycastParams",
-      "HumanoidStateType",
-      "RaycastResult"
-    ]
-  },
-  "types": {
-    "definitionFiles": [
-      "lua_modules/types"
-    ]
   }
 }

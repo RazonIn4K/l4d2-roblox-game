@@ -90,8 +90,7 @@ end
 
 function DirectorService:ConnectGameEvents()
 	-- Get GameService reference
-	local Services = ServerScriptService.Server.Services
-	local GameService = require(Services.GameService)
+	local GameService = require(script.Parent:WaitForChild("GameService") :: ModuleScript)
 
 	-- Listen for game state changes
 	GameService:Get().OnStateChanged.Event:Connect(function(oldState, newState)
@@ -223,8 +222,7 @@ end
 
 function DirectorService:UpdateCombatStatus()
 	-- Check if any enemies are near players
-	local Services = ServerScriptService.Server.Services
-	local EntityService = require(Services.EntityService)
+	local EntityService = require(script.Parent:WaitForChild("EntityService") :: ModuleScript)
 
 	self._inCombat = false
 
@@ -300,8 +298,7 @@ function DirectorService:SpawnCommonWave()
 	end
 	
 	-- Get EntityService
-	local Services = ServerScriptService.Server.Services
-	local EntityService = require(Services.EntityService)
+	local EntityService = require(script.Parent:WaitForChild("EntityService") :: ModuleScript)
 	
 	-- Create zombie model if needed
 	local zombieModel = self:GetOrCreateZombieModel()
@@ -337,8 +334,7 @@ end
 
 function DirectorService:SpawnSpecial(specialType: string)
 	-- Get EntityService
-	local Services = ServerScriptService.Server.Services
-	local EntityService = require(Services.EntityService)
+	local EntityService = require(script.Parent:WaitForChild("EntityService") :: ModuleScript)
 	
 	-- Find valid spawn points (prefer further away for specials)
 	local validSpawns = self:GetValidSpawnPoints()
