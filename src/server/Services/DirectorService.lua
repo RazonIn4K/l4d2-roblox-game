@@ -255,11 +255,23 @@ end
 
 -- Spawning
 
+-- Spawn point management
+local spawnPoints = {} :: {BasePart}
+local lastSpawnCheck = 0
+local SPAWN_CHECK_INTERVAL = 10 -- seconds between spawn point refreshes
+
 function DirectorService:UpdateTimers(dt: number)
 	self.CommonSpawnTimer -= dt
 
 	for specialType, timer in self.SpecialTimers do
 		self.SpecialTimers[specialType] = timer - dt
+	end
+	
+	-- Periodically refresh spawn points
+	lastSpawnCheck += dt
+	if lastSpawnCheck >= SPAWN_CHECK_INTERVAL then
+		self:FindSpawnPoints()
+		lastSpawnCheck = 0
 	end
 end
 
@@ -280,9 +292,42 @@ function DirectorService:ProcessSpawning(dt: number)
 end
 
 function DirectorService:SpawnCommonWave()
-	-- TODO: Implement common wave spawning
-	-- This will call EntityService to spawn zombies at valid spawn points
-	print("[Director] Spawning common wave")
+	-- Find valid spawn points
+	local validSpawns = self:GetValidSpawnPoints()
+	if #validSpawns == 0 then
+		warn("[Director] No valid spawn points found")
+		return
+	end
+	
+	-- Get EntityService
+	local Services = ServerScriptService.Server.Services
+	local EntityService = require(Services.EntityService)
+	
+	-- Create zombie model if needed
+	local zombieModel = self:GetOrCreateZombieModel()
+	if not zombieModel then
+		warn("[Director] Failed to create zombie model")
+		return
+	end
+	
+	-- Spawn wave size based on intensity
+	local waveSize = math.floor(3 + (self.Intensity / 100) * 5) -- 3-8 zombies
+	waveSize = math.min(waveSize, #validSpawns)
+	
+	-- Spawn zombies at random valid points
+	for i = 1, waveSize do
+		local spawnIndex = math.random(1, #validSpawns)
+		local spawnPoint = validSpawns[spawnIndex]
+		
+		-- Remove from list to avoid multiple spawns at same point
+		table.remove(validSpawns, spawnIndex)
+		
+		-- Spawn the entity
+		local entity = EntityService:Get():SpawnEntity(zombieModel, spawnPoint.Position)
+		if entity then
+			print(string.format("[Director] Spawned common zombie at %s", tostring(spawnPoint.Position)))
+		end
+	end
 end
 
 function DirectorService:CanSpawnSpecial(specialType: string): boolean
@@ -291,8 +336,53 @@ function DirectorService:CanSpawnSpecial(specialType: string): boolean
 end
 
 function DirectorService:SpawnSpecial(specialType: string)
-	-- TODO: Implement special infected spawning
-	print("[Director] Spawning special:", specialType)
+	-- Get EntityService
+	local Services = ServerScriptService.Server.Services
+	local EntityService = require(Services.EntityService)
+	
+	-- Find valid spawn points (prefer further away for specials)
+	local validSpawns = self:GetValidSpawnPoints()
+	if #validSpawns == 0 then
+		warn("[Director] No valid spawn points for special")
+		return
+	end
+	
+	-- Create special model
+	local specialModel = self:GetOrCreateSpecialModel(specialType)
+	if not specialModel then
+		warn("[Director] Failed to create special model:", specialType)
+		return
+	end
+	
+	-- Spawn at furthest valid point
+	local spawnPoint = validSpawns[1]
+	if #validSpawns > 1 then
+		-- Prefer spawn points further from players for specials
+		local bestScore = -math.huge
+		for _, point in validSpawns do
+			local score = self:GetSpawnPointScore(point)
+			if score > bestScore then
+				bestScore = score
+				spawnPoint = point
+			end
+		end
+	end
+	
+	-- Special configs
+	local specialConfigs = {
+		Hunter = { moveSpeed = 20, attackDamage = 15, detectionRadius = 50 },
+		Smoker = { moveSpeed = 12, attackDamage = 5, detectionRadius = 45 },
+		Boomer = { moveSpeed = 8, attackDamage = 1, detectionRadius = 30 },
+		Tank = { moveSpeed = 10, attackDamage = 25, detectionRadius = 60 },
+	}
+	
+	local config = specialConfigs[specialType] or {}
+	
+	-- Spawn the special
+	local entity = EntityService:Get():SpawnEntity(specialModel, spawnPoint.Position, config)
+	if entity then
+		print(string.format("[Director] Spawned %s at %s", specialType, tostring(spawnPoint.Position)))
+	end
 end
 
 -- Safe Room
@@ -309,11 +399,260 @@ end
 
 -- Cleanup
 
+-- Spawn point management
+function DirectorService:FindSpawnPoints()
+	spawnPoints = {}
+	
+	-- Look for parts named "EnemySpawn" in workspace
+	for _, obj in workspace:GetDescendants() do
+		if obj:IsA("BasePart") and obj.Name == "EnemySpawn" then
+			table.insert(spawnPoints, obj)
+		end
+	end
+	
+	print(string.format("[Director] Found %d spawn points", #spawnPoints))
+end
+
+function DirectorService:GetValidSpawnPoints(): {BasePart}
+	local validSpawns = {}
+	local now = os.clock()
+	
+	for _, spawnPoint in spawnPoints do
+		if not spawnPoint or not spawnPoint.Parent then
+			continue
+		end
+		
+		-- Check if spawn point is in player line of sight
+		if not self:IsSpawnPointVisible(spawnPoint) then
+			table.insert(validSpawns, spawnPoint)
+		end
+	end
+	
+	return validSpawns
+end
+
+function DirectorService:IsSpawnPointVisible(spawnPoint: BasePart): boolean
+	-- Check if any player can see this spawn point
+	for _, player in Players:GetPlayers() do
+		local char = player.Character
+		if not char then
+			continue
+		end
+		
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			continue
+		end
+		
+		-- Raycast from player to spawn point
+		local origin = hrp.Position
+		local direction = spawnPoint.Position - origin
+		local distance = direction.Magnitude
+		
+		-- Only check if within reasonable viewing distance
+		if distance > 50 then
+			continue
+		end
+		
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		-- Filter out players and non-solid objects
+		local filterDescendants = {}
+		for _, p in Players:GetPlayers() do
+			if p.Character then
+				table.insert(filterDescendants, p.Character)
+			end
+		end
+		rayParams.FilterDescendantsInstances = filterDescendants
+		
+		local result = workspace:Raycast(origin, direction, rayParams)
+		if result == nil then
+			-- Clear line of sight
+			return true
+		end
+	end
+	
+	return false
+end
+
+function DirectorService:GetSpawnPointScore(spawnPoint: BasePart): number
+	-- Score spawn points based on distance from players (higher = further)
+	local minDistance = math.huge
+	
+	for _, player in Players:GetPlayers() do
+		local char = player.Character
+		if not char then
+			continue
+		end
+		
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			continue
+		end
+		
+		local distance = (spawnPoint.Position - hrp.Position).Magnitude
+		minDistance = math.min(minDistance, distance)
+	end
+	
+	return minDistance
+end
+
+-- Model creation
+local zombieModelCache = {} :: {[string]: Model}
+
+function DirectorService:GetOrCreateZombieModel(): Model?
+	if zombieModelCache["Common"] then
+		return zombieModelCache["Common"]
+	end
+	
+	-- Create a simple zombie model
+	local zombie = Instance.new("Model")
+	zombie.Name = "Zombie"
+	
+	-- Create parts
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(1, 1, 1)
+	root.Material = Enum.Material.Metal
+	root.BrickColor = BrickColor.new("Dark green")
+	root.Parent = zombie
+	
+	local torso = Instance.new("Part")
+	torso.Name = "Torso"
+	torso.Size = Vector3.new(2, 2, 1)
+	torso.Material = Enum.Material.Metal
+	torso.BrickColor = BrickColor.new("Dark green")
+	torso.Parent = zombie
+	torso.CFrame = CFrame.new(0, 0, 0)
+	
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Size = Vector3.new(2, 1, 1)
+	head.Material = Enum.Material.Metal
+	head.BrickColor = BrickColor.new("Dark green")
+	head.Parent = zombie
+	head.CFrame = CFrame.new(0, 1.5, 0)
+	
+	-- Create limbs
+	local limbSize = Vector3.new(1, 2, 1)
+	local limbPositions = {
+		{ name = "Left Arm", pos = Vector3.new(1.5, 0, 0) },
+		{ name = "Right Arm", pos = Vector3.new(-1.5, 0, 0) },
+		{ name = "Left Leg", pos = Vector3.new(0.5, -2, 0) },
+		{ name = "Right Leg", pos = Vector3.new(-0.5, -2, 0) },
+	}
+	
+	for _, limb in limbPositions do
+		local part = Instance.new("Part")
+		part.Name = limb.name
+		part.Size = limbSize
+		part.Material = Enum.Material.Metal
+		part.BrickColor = BrickColor.new("Dark green")
+		part.Parent = zombie
+		part.CFrame = CFrame.new(limb.pos)
+	end
+	
+	-- Create humanoid
+	local humanoid = Instance.new("Humanoid")
+	humanoid.MaxHealth = 50
+	humanoid.Health = 50
+	humanoid.WalkSpeed = 14
+	humanoid.Parent = zombie
+	
+	-- Weld parts together
+	local welds = {
+		{ part = torso, c0 = CFrame.new(0, 0, 0) },
+		{ part = head, c0 = CFrame.new(0, 1.5, 0) },
+		{ part = zombie:FindFirstChild("Left Arm"), c0 = CFrame.new(1.5, 0, 0) },
+		{ part = zombie:FindFirstChild("Right Arm"), c0 = CFrame.new(-1.5, 0, 0) },
+		{ part = zombie:FindFirstChild("Left Leg"), c0 = CFrame.new(0.5, -2, 0) },
+		{ part = zombie:FindFirstChild("Right Leg"), c0 = CFrame.new(-0.5, -2, 0) },
+	}
+	
+	for _, weld in welds do
+		if weld.part then
+			local weldConstraint = Instance.new("WeldConstraint")
+			weldConstraint.Part0 = root
+			weldConstraint.Part1 = weld.part
+			weldConstraint.Parent = root
+		end
+	end
+	
+	-- Set primary part
+	zombie.PrimaryPart = root
+	
+	zombieModelCache["Common"] = zombie
+	return zombie
+end
+
+function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
+	if zombieModelCache[specialType] then
+		return zombieModelCache[specialType]
+	end
+	
+	-- Create a colored variant for specials
+	local baseModel = self:GetOrCreateZombieModel()
+	if not baseModel then
+		return nil
+	end
+	
+	local specialModel = baseModel:Clone()
+	specialModel.Name = specialType
+	
+	-- Color based on type
+	local colors = {
+		Hunter = "Bright orange",
+		Smoker = "Dark gray",
+		Boomer = "Bright green",
+		Tank = "Bright red",
+	}
+	
+	local color = colors[specialType] or "White"
+	for _, part in specialModel:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.BrickColor = BrickColor.new(color)
+			-- Make specials larger
+			if specialType == "Tank" then
+				part.Size = part.Size * 1.5
+			elseif specialType == "Hunter" then
+				part.Size = part.Size * 0.9
+			elseif specialType == "Boomer" then
+				part.Size = part.Size * 1.2
+			end
+		end
+	end
+	
+	-- Update humanoid stats
+	local humanoid = specialModel:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local health = {
+			Hunter = 75,
+			Smoker = 100,
+			Boomer = 50,
+			Tank = 200,
+		}
+		
+		humanoid.MaxHealth = health[specialType] or 100
+		humanoid.Health = health[specialType] or 100
+	end
+	
+	zombieModelCache[specialType] = specialModel
+	return specialModel
+end
+
 function DirectorService:Destroy()
 	for _, connection in self._connections do
 		connection:Disconnect()
 	end
 	table.clear(self._connections)
+	
+	-- Clean up cached models
+	for _, model in zombieModelCache do
+		if model then
+			model:Destroy()
+		end
+	end
+	table.clear(zombieModelCache)
 end
 
 return DirectorService

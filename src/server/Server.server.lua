@@ -51,6 +51,46 @@ local function setupRemotes()
 	print("[Server] Remote events configured")
 end
 
+-- Setup workspace folders
+local function setupWorkspace()
+	-- Create Enemies folder if it doesn't exist
+	if not workspace:FindFirstChild("Enemies") then
+		local enemies = Instance.new("Folder")
+		enemies.Name = "Enemies"
+		enemies.Parent = workspace
+		print("[Server] Created Enemies folder")
+	end
+	
+	-- Create some default spawn points for testing
+	if #workspace:GetDescendants() == 0 or not workspace:FindFirstChild("EnemySpawn", true) then
+		local spawnPositions = {
+			Vector3.new(50, 0, 0),
+			Vector3.new(-50, 0, 0),
+			Vector3.new(0, 0, 50),
+			Vector3.new(0, 0, -50),
+			Vector3.new(35, 0, 35),
+			Vector3.new(-35, 0, -35),
+			Vector3.new(50, 0, 25),
+			Vector3.new(-50, 0, -25),
+		}
+		
+		for i, pos in spawnPositions do
+			local spawn = Instance.new("Part")
+			spawn.Name = "EnemySpawn"
+			spawn.Size = Vector3.new(2, 1, 2)
+			spawn.Position = pos
+			spawn.Material = Enum.Material.Neon
+			spawn.BrickColor = BrickColor.new("Bright red")
+			spawn.Anchored = true
+			spawn.CanCollide = false
+			spawn.Transparency = 0.7
+			spawn.Parent = workspace
+		end
+		
+		print(string.format("[Server] Created %d default spawn points", #spawnPositions))
+	end
+end
+
 -- Initialize services
 local function initializeServices()
 	local Services = ServerScriptService.Server.Services
@@ -77,6 +117,7 @@ print("[Server] Initializing L4D2 Horror Game...")
 
 setupCollisionGroups()
 setupRemotes()
+setupWorkspace()
 initializeServices()
 
 print("[Server] Server ready!")
