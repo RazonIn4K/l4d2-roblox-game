@@ -109,6 +109,15 @@ function EntityService:Update(dt: number)
 		-- Update entity based on state
 		self:UpdateEntity(entity, dt)
 	end
+	
+	-- Update special entities (Hunter, etc.)
+	if self.SpecialEntities then
+		for id, specialEntity in self.SpecialEntities do
+			if specialEntity.Update then
+				specialEntity:Update(dt)
+			end
+		end
+	end
 end
 
 function EntityService:UpdateEntity(entity: Entity, dt: number)

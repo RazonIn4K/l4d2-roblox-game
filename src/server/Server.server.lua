@@ -449,6 +449,70 @@ local function setupChatCommands()
 				end
 				
 				print(string.format("[Test] Spawned 5 zombies for player %s", player.Name))
+			elseif message == "/hunter" then
+				-- Spawn a Hunter near the player
+				local Services = script.Parent:WaitForChild("Services") :: Instance
+				local EntityService = require(Services:WaitForChild("EntityService") :: any)
+				local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
+				
+				local character = player.Character
+				if not character then
+					return
+				end
+				
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					return
+				end
+				
+				-- Get Hunter model
+				local hunterModel = DirectorService:Get():GetOrCreateSpecialModel("Hunter")
+				if not hunterModel then
+					warn("[Test] Failed to create Hunter model")
+					return
+				end
+				
+				-- Spawn 20 studs in front of player
+				local spawnPos = hrp.Position + hrp.CFrame.LookVector * 20
+				local hunter = EntityService:Get():SpawnHunter(hunterModel, spawnPos)
+				
+				if hunter then
+					print(string.format("[Test] Spawned Hunter for %s at (%.1f, %.1f, %.1f)", 
+						player.Name, spawnPos.X, spawnPos.Y, spawnPos.Z))
+				end
+			elseif message == "/kill" then
+				-- Kill all enemies
+				local Services = script.Parent:WaitForChild("Services") :: Instance
+				local EntityService = require(Services:WaitForChild("EntityService") :: any)
+				
+				local count = 0
+				for id, entity in EntityService:Get().Entities do
+					EntityService:Get():KillEntity(id)
+					count += 1
+				end
+				
+				-- Also kill special entities
+				if EntityService:Get().SpecialEntities then
+					for id, hunter in EntityService:Get().SpecialEntities do
+						if hunter.Die then
+							hunter:Die()
+						end
+						count += 1
+					end
+					EntityService:Get().SpecialEntities = {}
+				end
+				
+				print(string.format("[Test] Killed %d enemies for %s", count, player.Name))
+			elseif message == "/heal" then
+				-- Heal the player
+				local character = player.Character
+				if character then
+					local humanoid = character:FindFirstChildOfClass("Humanoid")
+					if humanoid then
+						humanoid.Health = humanoid.MaxHealth
+						print(string.format("[Test] Healed %s to full health", player.Name))
+					end
+				end
 			end
 		end)
 	end)
