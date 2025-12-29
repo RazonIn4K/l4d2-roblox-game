@@ -62,7 +62,11 @@ local function setupWorkspace()
 	end
 	
 	-- Create some default spawn points for testing
-	if #workspace:GetDescendants() == 0 or not workspace:FindFirstChild("EnemySpawn", true) then
+	if not workspace:FindFirstChild("SpawnPoints") then
+		local spawnPointsFolder = Instance.new("Folder")
+		spawnPointsFolder.Name = "SpawnPoints"
+		spawnPointsFolder.Parent = workspace
+		
 		local spawnPositions = {
 			Vector3.new(50, 0, 0),
 			Vector3.new(-50, 0, 0),
@@ -76,7 +80,7 @@ local function setupWorkspace()
 		
 		for i, pos in spawnPositions do
 			local spawn = Instance.new("Part")
-			spawn.Name = "EnemySpawn"
+			spawn.Name = "CommonSpawn"
 			spawn.Size = Vector3.new(2, 1, 2)
 			spawn.Position = pos
 			spawn.Material = Enum.Material.Neon
@@ -84,11 +88,71 @@ local function setupWorkspace()
 			spawn.Anchored = true
 			spawn.CanCollide = false
 			spawn.Transparency = 0.7
-			spawn.Parent = workspace
+			spawn.Parent = spawnPointsFolder
+			
+			-- Mark as Common spawn point for SpawnPointService
+			spawn:SetAttribute("SpawnType", "Common")
 		end
 		
-		print(string.format("[Server] Created %d default spawn points", #spawnPositions))
+		print(string.format("[Server] Created %d spawn points with SpawnType='Common' attribute", #spawnPositions))
 	end
+end
+
+-- Setup chat commands
+local function setupChatCommands()
+	local Players = game:GetService("Players")
+	
+	Players.PlayerAdded:Connect(function(player)
+		player.Chatted:Connect(function(message)
+			if message == "/test" then
+				-- Get services
+				local Services = script.Parent:WaitForChild("Services") :: Instance
+				local EntityService = require(Services:WaitForChild("EntityService") :: any)
+				local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
+				
+				-- Get zombie model
+				local zombieModel = DirectorService:Get():GetOrCreateZombieModel()
+				if not zombieModel then
+					return
+				end
+				
+				-- Spawn 5 zombies around the player
+				local character = player.Character
+				if not character then
+					return
+				end
+				
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					return
+				end
+				
+				local spawnPositions = {}
+				for i = 1, 5 do
+					local angle = (i / 5) * math.pi * 2
+					local offset = Vector3.new(
+						math.cos(angle) * 15,
+						0,
+						math.sin(angle) * 15
+					)
+					table.insert(spawnPositions, hrp.Position + offset)
+				end
+				
+				-- Spawn zombies
+				for i, position in spawnPositions do
+					local entity = EntityService:Get():SpawnEntity(zombieModel, position)
+					if entity then
+						print(string.format("[Test] Spawned zombie #%d for %s at (%.1f, %.1f, %.1f)", 
+							i, player.Name, position.X, position.Y, position.Z))
+					end
+				end
+				
+				print(string.format("[Test] Spawned 5 zombies for player %s", player.Name))
+			end
+		end)
+	end)
+	
+	print("[Server] Chat commands initialized")
 end
 
 -- Initialize services
@@ -105,12 +169,14 @@ local function initializeServices()
 	local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
 	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	local PlayerService = require(Services:WaitForChild("PlayerService") :: any)
+	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
 
 	-- Start services in order
 	print("[Server] Starting services...")
 
 	GameService:Get():Start()
 	PlayerService:Get():Start()
+	SpawnPointService:Get():Start()  -- Must start before DirectorService
 	EntityService:Get():Start()
 	DirectorService:Get():Start()
 
@@ -123,6 +189,7 @@ print("[Server] Initializing L4D2 Horror Game...")
 setupCollisionGroups()
 setupRemotes()
 setupWorkspace()
+setupChatCommands()
 initializeServices()
 
 print("[Server] Server ready!")

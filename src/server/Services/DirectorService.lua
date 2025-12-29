@@ -97,13 +97,19 @@ function DirectorService:ConnectGameEvents()
 	GameService:Get().OnStateChanged.Event:Connect(function(oldState, newState)
 		if newState == "Playing" then
 			self:TransitionTo("Relax") -- Grace period at start
-			self.StateTimer = 10
+			self.StateTimer = 5 -- 5-second timer for testing
+			print("[Director] Game started, entering Relax state for 5 seconds")
 		elseif newState == "SafeRoom" then
 			self:TransitionTo("SafeRoom")
 		elseif newState == "Failed" or newState == "Victory" then
 			self:TransitionTo("Idle")
 		end
 	end)
+	
+	-- Test trigger: Automatically transition to Playing state after 2 seconds
+	task.wait(2)
+	print("[Director] Test trigger: Transitioning to Playing state...")
+	GameService:Get():SetState("Playing")
 end
 
 function DirectorService:Update(dt: number)
@@ -256,23 +262,11 @@ end
 
 -- Spawning
 
--- Spawn point management
-local spawnPoints = {} :: {BasePart}
-local lastSpawnCheck = 0
-local SPAWN_CHECK_INTERVAL = 10 -- seconds between spawn point refreshs
-
 function DirectorService:UpdateTimers(dt: number)
 	self.CommonSpawnTimer -= dt
 
 	for specialType, timer in self.SpecialTimers do
 		self.SpecialTimers[specialType] = timer - dt
-	end
-	
-	-- Periodically refresh spawn points
-	lastSpawnCheck += dt
-	if lastSpawnCheck >= SPAWN_CHECK_INTERVAL then
-		self:FindSpawnPoints()
-		lastSpawnCheck = 0
 	end
 end
 
@@ -293,40 +287,47 @@ function DirectorService:ProcessSpawning(dt: number)
 end
 
 function DirectorService:SpawnCommonWave()
-	-- Find valid spawn points
-	local validSpawns = self:GetValidSpawnPoints()
-	if #validSpawns == 0 then
-		warn("[Director] No valid spawn points found")
+	-- Get services
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
+	
+	-- Get valid spawn points with 75% behind-players bias
+	local spawnPositions = SpawnPointService:Get():GetValidSpawnPoints("Common", 8)
+	
+	print(string.format("[Director] Found %d valid spawn points", #spawnPositions))
+	
+	if #spawnPositions == 0 then
+		warn("[Director] No valid spawn points found for common wave")
 		return
 	end
 	
-	-- Get EntityService
-	local Services = script.Parent :: Instance
-	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+	-- Determine wave size: 5-10 zombies for BuildUp state
+	local waveSize = math.min(#spawnPositions, math.random(5, 10))
 	
-	-- Create zombie model if needed
+	print(string.format("[Director] Spawning wave of %d zombies", waveSize))
+	
+	-- Create zombie model once
 	local zombieModel = self:GetOrCreateZombieModel()
 	if not zombieModel then
 		warn("[Director] Failed to create zombie model")
 		return
 	end
 	
-	-- Spawn wave size based on intensity
-	local waveSize = math.floor(3 + (self.Intensity / 100) * 5) -- 3-8 zombies
-	waveSize = math.min(waveSize, #validSpawns)
-	
-	-- Spawn zombies at random valid points
+	-- Spawn zombies at selected valid points
 	for i = 1, waveSize do
-		local spawnIndex = math.random(1, #validSpawns)
-		local spawnPoint = validSpawns[spawnIndex]
+		if i > #spawnPositions then
+			break
+		end
 		
-		-- Remove from list to avoid multiple spawns at same point
-		table.remove(validSpawns, spawnIndex)
+		local position = spawnPositions[i]
+		local entity = EntityService:Get():SpawnEntity(zombieModel, position)
 		
-		-- Spawn the entity
-		local entity = EntityService:Get():SpawnEntity(zombieModel, spawnPoint.Position)
 		if entity then
-			print(string.format("[Director] Spawned common zombie at %s", tostring(spawnPoint.Position)))
+			print(string.format("[Entity] Spawned zombie #%d at position (%.1f, %.1f, %.1f)", 
+				i, position.X, position.Y, position.Z))
+		else
+			warn(string.format("[Director] Failed to spawn zombie at position", tostring(position)))
 		end
 	end
 end
@@ -337,16 +338,10 @@ function DirectorService:CanSpawnSpecial(specialType: string): boolean
 end
 
 function DirectorService:SpawnSpecial(specialType: string)
-	-- Get EntityService
+	-- Get services
 	local Services = script.Parent :: Instance
 	local EntityService = require(Services:WaitForChild("EntityService") :: any)
-	
-	-- Find valid spawn points (prefer further away for specials)
-	local validSpawns = self:GetValidSpawnPoints()
-	if #validSpawns == 0 then
-		warn("[Director] No valid spawn points for special")
-		return
-	end
+	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
 	
 	-- Create special model
 	local specialModel = self:GetOrCreateSpecialModel(specialType)
@@ -355,19 +350,15 @@ function DirectorService:SpawnSpecial(specialType: string)
 		return
 	end
 	
-	-- Spawn at furthest valid point
-	local spawnPoint = validSpawns[1]
-	if #validSpawns > 1 then
-		-- Prefer spawn points further from players for specials
-		local bestScore = -math.huge
-		for _, point in validSpawns do
-			local score = self:GetSpawnPointScore(point)
-			if score > bestScore then
-				bestScore = score
-				spawnPoint = point
-			end
-		end
+	-- Get valid spawn points (specials use "Special" type, minimum 40 studs away)
+	local spawnPositions = SpawnPointService:Get():GetValidSpawnPoints("Special", 1)
+	if #spawnPositions == 0 then
+		warn("[Director] No valid spawn points for special:", specialType)
+		return
 	end
+	
+	-- Use first valid position (already filtered for distance and visibility)
+	local spawnPosition = spawnPositions[1]
 	
 	-- Special configs
 	local specialConfigs = {
@@ -380,9 +371,9 @@ function DirectorService:SpawnSpecial(specialType: string)
 	local config = specialConfigs[specialType] or {}
 	
 	-- Spawn the special
-	local entity = EntityService:Get():SpawnEntity(specialModel, spawnPoint.Position, config)
+	local entity = EntityService:Get():SpawnEntity(specialModel, spawnPosition, config)
 	if entity then
-		print(string.format("[Director] Spawned %s at %s", specialType, tostring(spawnPoint.Position)))
+		print(string.format("[Director] Spawned %s at %s", specialType, tostring(spawnPosition)))
 	end
 end
 
@@ -399,104 +390,6 @@ function DirectorService:ExitSafeRoom()
 end
 
 -- Cleanup
-
--- Spawn point management
-function DirectorService:FindSpawnPoints()
-	spawnPoints = {}
-	
-	-- Look for parts named "EnemySpawn" in workspace
-	for _, obj in workspace:GetDescendants() do
-		if obj:IsA("BasePart") and obj.Name == "EnemySpawn" then
-			table.insert(spawnPoints, obj)
-		end
-	end
-	
-	print(string.format("[Director] Found %d spawn points", #spawnPoints))
-end
-
-function DirectorService:GetValidSpawnPoints(): {BasePart}
-	local validSpawns = {}
-	local now = os.clock()
-	
-	for _, spawnPoint in spawnPoints do
-		if not spawnPoint or not spawnPoint.Parent then
-			continue
-		end
-		
-		-- Check if spawn point is in player line of sight
-		if not self:IsSpawnPointVisible(spawnPoint) then
-			table.insert(validSpawns, spawnPoint)
-		end
-	end
-	
-	return validSpawns
-end
-
-function DirectorService:IsSpawnPointVisible(spawnPoint: BasePart): boolean
-	-- Check if any player can see this spawn point
-	for _, player in Players:GetPlayers() do
-		local char = player.Character
-		if not char then
-			continue
-		end
-		
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			continue
-		end
-		
-		-- Raycast from player to spawn point
-		local origin = hrp.Position
-		local direction = spawnPoint.Position - origin
-		local distance = direction.Magnitude
-		
-		-- Only check if within reasonable viewing distance
-		if distance > 50 then
-			continue
-		end
-		
-		local rayParams = RaycastParams.new()
-		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		-- Filter out players and non-solid objects
-		local filterDescendants = {}
-		for _, p in Players:GetPlayers() do
-			if p.Character then
-				table.insert(filterDescendants, p.Character)
-			end
-		end
-		rayParams.FilterDescendantsInstances = filterDescendants
-		
-		local result = workspace:Raycast(origin, direction, rayParams)
-		if result == nil then
-			-- Clear line of sight
-			return true
-		end
-	end
-	
-	return false
-end
-
-function DirectorService:GetSpawnPointScore(spawnPoint: BasePart): number
-	-- Score spawn points based on distance from players (higher = further)
-	local minDistance = math.huge
-	
-	for _, player in Players:GetPlayers() do
-		local char = player.Character
-		if not char then
-			continue
-		end
-		
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			continue
-		end
-		
-		local distance = (spawnPoint.Position - hrp.Position).Magnitude
-		minDistance = math.min(minDistance, distance)
-	end
-	
-	return minDistance
-end
 
 -- Model creation
 local zombieModelCache = {} :: {[string]: Model}
