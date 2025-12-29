@@ -13,6 +13,9 @@ local Debris = game:GetService("Debris")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
+-- Import controllers
+local UIController = require(script.Parent:WaitForChild("Controllers"):WaitForChild("UIController"))
+
 -- Constants
 local RESCUE_RANGE = 4  -- Must match server
 
@@ -381,5 +384,8 @@ end)
 
 -- Initialize ammo display
 updateAmmoDisplay()
+
+-- Initialize UI Controller
+UIController:Get():Start()
 
 print("[Client] Initialized")
