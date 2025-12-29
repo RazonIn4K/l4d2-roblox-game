@@ -255,3 +255,34 @@ Detailed implementation guides in `/docs`:
 
 ### Weapon Slots
 Primary, Secondary (Pistol, infinite), Throwable, Medical
+
+## Test Commands (Chat)
+| Command | Action |
+|---------|--------|
+| `/test` | Spawn 5 common zombies around player |
+| `/hunter` | Spawn a Hunter 20 studs in front |
+| `/kill` | Kill all enemies |
+| `/heal` | Heal player to full health |
+
+## Current Implementation Status
+
+### Completed Systems
+- **EntityService** - Single-script NPC management with update loop
+- **DirectorService** - AI Director with pacing states
+- **WeaponService** - Pistol with server-authoritative hit detection
+- **PlayerService** - Health, incap, revival, rescue from pin
+- **Hunter** - Full state machine (Stalk→Crouch→Pounce→Pinning)
+- **UIController** - Health bar, teammate cards, incap overlay
+- **Test Environment** - 3-room layout with spawn points
+
+### Test Environment Layout
+```
+Start Room (40x40) → Corridor (20x60) → Safe Room (30x30)
+   (0,0,0)              (50,0,0)           (95,0,0)
+```
+
+### Spawn Points
+- 4 Common in Start Room corners
+- 2 Common in Corridor
+- 1 Special in Corridor (for Hunter)
+- None in Safe Room
