@@ -1,8 +1,0 @@
-{
-  "languageServer": {
-    "workspace": {
-      "library": ["lua_modules"],
-      "rojo": "default.project.json"
-    }
-  }
-}

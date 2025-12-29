@@ -4,7 +4,7 @@
     Initializes all server-side services for the L4D2 horror game
 ]]
 
-local ServerScriptService = game:GetService("ServerScriptService")
+local _ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PhysicsService = game:GetService("PhysicsService")
 
@@ -93,13 +93,18 @@ end
 
 -- Initialize services
 local function initializeServices()
-	local Services = script.Parent:WaitForChild("Services") :: Folder
+	local Server = script.Parent :: Instance
+	local Services = Server:WaitForChild("Services")
+	if not Services then
+		error("Services folder not found!")
+		return
+	end
 
 	-- Import services
-	local GameService = require(Services:WaitForChild("GameService") :: ModuleScript)
-	local DirectorService = require(Services:WaitForChild("DirectorService") :: ModuleScript)
-	local EntityService = require(Services:WaitForChild("EntityService") :: ModuleScript)
-	local PlayerService = require(Services:WaitForChild("PlayerService") :: ModuleScript)
+	local GameService = require(Services:WaitForChild("GameService"))
+	local DirectorService = require(Services:WaitForChild("DirectorService"))
+	local EntityService = require(Services:WaitForChild("EntityService"))
+	local PlayerService = require(Services:WaitForChild("PlayerService"))
 
 	-- Start services in order
 	print("[Server] Starting services...")
