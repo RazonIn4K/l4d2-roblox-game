@@ -346,4 +346,60 @@ function PlayerService:Destroy()
 	table.clear(self.BleedoutTasks)
 end
 
+-- Rescue a player who is pinned by a Hunter
+function PlayerService:RescuePinnedPlayer(rescuer: Player, victim: Player): boolean
+	-- Check if rescuer is valid
+	local rescuerChar = rescuer.Character
+	if not rescuerChar then return false end
+	
+	local rescuerHumanoid = rescuerChar:FindFirstChildOfClass("Humanoid")
+	if not rescuerHumanoid or rescuerHumanoid.Health <= 0 then return false end
+	
+	-- Check if victim is pinned
+	local victimChar = victim.Character
+	if not victimChar then return false end
+	
+	local isPinned = victimChar:GetAttribute("IsPinned")
+	if not isPinned then return false end
+	
+	-- Check distance
+	local rescuerHrp = rescuerChar:FindFirstChild("HumanoidRootPart")
+	local victimHrp = victimChar:FindFirstChild("HumanoidRootPart")
+	if not rescuerHrp or not victimHrp then return false end
+	
+	local distance = (rescuerHrp.Position - victimHrp.Position).Magnitude
+	if distance > CONFIG.reviveRange then
+		print(string.format("[PlayerService] %s too far to rescue %s (%.1f studs)", 
+			rescuer.Name, victim.Name, distance))
+		return false
+	end
+	
+	-- Get EntityService and rescue
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+	
+	local success = EntityService:Get():RescuePinnedPlayer(rescuer, victim)
+	if success then
+		print(string.format("[PlayerService] %s rescued %s from Hunter!", rescuer.Name, victim.Name))
+	end
+	
+	return success
+end
+
+-- Check if a player is pinned
+function PlayerService:IsPlayerPinned(player: Player): boolean
+	local char = player.Character
+	if not char then return false end
+	
+	return char:GetAttribute("IsPinned") == true
+end
+
+-- Get the entity ID that is pinning a player
+function PlayerService:GetPinningEntityId(player: Player): string?
+	local char = player.Character
+	if not char then return nil end
+	
+	return char:GetAttribute("PinnedBy")
+end
+
 return PlayerService

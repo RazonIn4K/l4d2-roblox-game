@@ -9,6 +9,9 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local _ServerScriptService = game:GetService("ServerScriptService")
 
+-- Import EntityFactory
+local EntityFactory = require(script.Parent:WaitForChild("EntityFactory"))
+
 -- Types
 export type DirectorState = "Idle" | "BuildUp" | "SustainPeak" | "PeakFade" | "Relax" | "Crescendo" | "SafeRoom"
 
@@ -360,9 +363,17 @@ function DirectorService:SpawnSpecial(specialType: string)
 	-- Use first valid position (already filtered for distance and visibility)
 	local spawnPosition = spawnPositions[1]
 	
-	-- Special configs
+	-- Use specialized spawning for Hunter
+	if specialType == "Hunter" then
+		local hunter = EntityService:Get():SpawnHunter(specialModel, spawnPosition)
+		if hunter then
+			print(string.format("[Director] Spawned Hunter at %s", tostring(spawnPosition)))
+		end
+		return
+	end
+	
+	-- Special configs for other types
 	local specialConfigs = {
-		Hunter = { moveSpeed = 20, attackDamage = 15, detectionRadius = 50 },
 		Smoker = { moveSpeed = 12, attackDamage = 5, detectionRadius = 45 },
 		Boomer = { moveSpeed = 8, attackDamage = 1, detectionRadius = 30 },
 		Tank = { moveSpeed = 10, attackDamage = 25, detectionRadius = 60 },
@@ -399,83 +410,11 @@ function DirectorService:GetOrCreateZombieModel(): Model?
 		return zombieModelCache["Common"]
 	end
 	
-	-- Create a simple zombie model
-	local zombie = Instance.new("Model")
-	zombie.Name = "Zombie"
-	
-	-- Create parts
-	local root = Instance.new("Part")
-	root.Name = "HumanoidRootPart"
-	root.Size = Vector3.new(1, 1, 1)
-	root.Material = Enum.Material.Metal
-	root.BrickColor = BrickColor.new("Dark green")
-	root.Parent = zombie
-	
-	local torso = Instance.new("Part")
-	torso.Name = "Torso"
-	torso.Size = Vector3.new(2, 2, 1)
-	torso.Material = Enum.Material.Metal
-	torso.BrickColor = BrickColor.new("Dark green")
-	torso.Parent = zombie
-	torso.CFrame = CFrame.new(0, 0, 0)
-	
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Size = Vector3.new(2, 1, 1)
-	head.Material = Enum.Material.Metal
-	head.BrickColor = BrickColor.new("Dark green")
-	head.Parent = zombie
-	head.CFrame = CFrame.new(0, 1.5, 0)
-	
-	-- Create limbs
-	local limbSize = Vector3.new(1, 2, 1)
-	local limbPositions = {
-		{ name = "Left Arm", pos = Vector3.new(1.5, 0, 0) },
-		{ name = "Right Arm", pos = Vector3.new(-1.5, 0, 0) },
-		{ name = "Left Leg", pos = Vector3.new(0.5, -2, 0) },
-		{ name = "Right Leg", pos = Vector3.new(-0.5, -2, 0) },
-	}
-	
-	for _, limb in limbPositions do
-		local part = Instance.new("Part")
-		part.Name = limb.name
-		part.Size = limbSize
-		part.Material = Enum.Material.Metal
-		part.BrickColor = BrickColor.new("Dark green")
-		part.Parent = zombie
-		part.CFrame = CFrame.new(limb.pos)
-	end
-	
-	-- Create humanoid
-	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = 50
-	humanoid.Health = 50
-	humanoid.WalkSpeed = 14
-	humanoid.Parent = zombie
-	
-	-- Weld parts together
-	local welds = {
-		{ part = torso, c0 = CFrame.new(0, 0, 0) },
-		{ part = head, c0 = CFrame.new(0, 1.5, 0) },
-		{ part = zombie:FindFirstChild("Left Arm"), c0 = CFrame.new(1.5, 0, 0) },
-		{ part = zombie:FindFirstChild("Right Arm"), c0 = CFrame.new(-1.5, 0, 0) },
-		{ part = zombie:FindFirstChild("Left Leg"), c0 = CFrame.new(0.5, -2, 0) },
-		{ part = zombie:FindFirstChild("Right Leg"), c0 = CFrame.new(-0.5, -2, 0) },
-	}
-	
-	for _, weld in welds do
-		if weld.part then
-			local weldConstraint = Instance.new("WeldConstraint")
-			weldConstraint.Part0 = root
-			weldConstraint.Part1 = weld.part
-			weldConstraint.Parent = root
-		end
-	end
-	
-	-- Set primary part
-	zombie.PrimaryPart = root
-	
+	-- Use EntityFactory to create model
+	local zombie = EntityFactory.createCommon()
 	zombieModelCache["Common"] = zombie
+	
+	print("[Director] Created common zombie model")
 	return zombie
 end
 
@@ -484,7 +423,15 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 		return zombieModelCache[specialType]
 	end
 	
-	-- Create a colored variant for specials
+	-- Use EntityFactory for Hunter
+	if specialType == "Hunter" then
+		local hunterModel = EntityFactory.createHunter()
+		zombieModelCache["Hunter"] = hunterModel
+		print("[Director] Created Hunter model via EntityFactory")
+		return hunterModel
+	end
+	
+	-- Create a colored variant for other specials
 	local baseModel = self:GetOrCreateZombieModel()
 	if not baseModel then
 		return nil
@@ -495,7 +442,6 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 	
 	-- Color based on type
 	local colors = {
-		Hunter = "Bright orange",
 		Smoker = "Dark gray",
 		Boomer = "Bright green",
 		Tank = "Bright red",
@@ -508,8 +454,6 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 			-- Make specials larger
 			if specialType == "Tank" then
 				part.Size = part.Size * 1.5
-			elseif specialType == "Hunter" then
-				part.Size = part.Size * 0.9
 			elseif specialType == "Boomer" then
 				part.Size = part.Size * 1.2
 			end
@@ -520,10 +464,9 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 	local humanoid = specialModel:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		local health = {
-			Hunter = 75,
-			Smoker = 100,
+			Smoker = 250,
 			Boomer = 50,
-			Tank = 200,
+			Tank = 6000,
 		}
 		
 		humanoid.MaxHealth = health[specialType] or 100

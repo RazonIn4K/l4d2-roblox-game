@@ -9,6 +9,9 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local Debris = game:GetService("Debris")
 
+-- Import entity types
+local Hunter = nil  -- Lazy loaded to avoid circular dependency
+
 -- Types
 export type EntityState = "Idle" | "Patrol" | "Chase" | "Attack" | "Stagger" | "Dead"
 
@@ -367,10 +370,6 @@ function EntityService:KillEntity(id: string)
 	end)
 end
 
-function EntityService:GetEntityById(id: string): Entity?
-	return self.Entities[id]
-end
-
 function EntityService:GetEntityCount(): number
 	local count = 0
 	for _ in self.Entities do
@@ -391,6 +390,69 @@ function EntityService:Destroy()
 		end
 	end
 	table.clear(self.Entities)
+end
+
+-- Special entity spawning for Hunter
+function EntityService:SpawnHunter(model: Model, position: Vector3): any
+	-- Lazy load Hunter class
+	if not Hunter then
+		Hunter = require(script.Parent.Entities:WaitForChild("Hunter"))
+	end
+	
+	-- Clone and position model
+	local clone = model:Clone()
+	clone:PivotTo(CFrame.new(position))
+	clone.Parent = workspace:FindFirstChild("Enemies")
+	
+	-- Create Hunter instance
+	local hunter = Hunter.new(clone)
+	
+	-- Store reference
+	local id = tostring(self._nextId)
+	self._nextId += 1
+	clone:SetAttribute("EntityId", id)
+	clone:SetAttribute("EntityType", "Hunter")
+	
+	-- Store in special entities table
+	if not self.SpecialEntities then
+		self.SpecialEntities = {}
+	end
+	self.SpecialEntities[id] = hunter
+	
+	print(string.format("[EntityService] Spawned Hunter with ID %s at %s", id, tostring(position)))
+	return hunter
+end
+
+-- Rescue a pinned player
+function EntityService:RescuePinnedPlayer(rescuer: Player, victim: Player): boolean
+	local victimChar = victim.Character
+	if not victimChar then return false end
+	
+	local pinnedBy = victimChar:GetAttribute("PinnedBy")
+	if not pinnedBy then return false end
+	
+	-- Find the Hunter that's pinning
+	if self.SpecialEntities then
+		local hunter = self.SpecialEntities[pinnedBy]
+		if hunter and hunter.Rescue then
+			hunter:Rescue()
+			print(string.format("[EntityService] %s rescued %s from Hunter", rescuer.Name, victim.Name))
+			return true
+		end
+	end
+	
+	return false
+end
+
+-- Get entity by ID (works for both regular and special entities)
+function EntityService:GetEntityById(id: string): any
+	if self.Entities[id] then
+		return self.Entities[id]
+	end
+	if self.SpecialEntities and self.SpecialEntities[id] then
+		return self.SpecialEntities[id]
+	end
+	return nil
 end
 
 return EntityService
