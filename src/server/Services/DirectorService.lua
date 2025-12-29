@@ -244,7 +244,8 @@ function DirectorService:UpdateCombatStatus()
 				continue
 			end
 
-			local distance = ((entity.rootPart :: BasePart).Position - hrp.Position).Magnitude
+			local rootPart = entity.rootPart :: BasePart
+			local distance = (rootPart.Position - hrp.Position).Magnitude
 			if distance < CONFIG.combatRadius then
 				self._inCombat = true
 				return
