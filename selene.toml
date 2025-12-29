@@ -1,0 +1,13 @@
+std = "roblox"
+
+[config]
+property_access_check = "none"
+
+[rules]
+unused_variable = "warn"
+shadowing = "warn"
+global_usage = "warn"
+if_same_then_else = "warn"
+ifs_same_cond = "warn"
+multiple_statements = "allow"
+parenthese_conditions = "allow"

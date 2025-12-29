@@ -1,0 +1,85 @@
+{
+  "name": "L4D2-Horror",
+  "tree": {
+    "$className": "DataModel",
+    
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Shared": {
+        "$path": "src/shared"
+      },
+      "Packages": {
+        "$path": "Packages"
+      },
+      "Remotes": {
+        "$className": "Folder"
+      }
+    },
+    
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "ServerPackages": {
+        "$path": "ServerPackages"
+      },
+      "Templates": {
+        "$className": "Folder"
+      }
+    },
+    
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 128,
+        "StreamingTargetRadius": 512
+      },
+      "Rooms": {
+        "$className": "Folder"
+      },
+      "Enemies": {
+        "$className": "Folder"
+      },
+      "Effects": {
+        "$className": "Folder"
+      }
+    },
+    
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Ambient": [0.039, 0.039, 0.059],
+        "Brightness": 0.5,
+        "OutdoorAmbient": [0.078, 0.078, 0.118],
+        "ClockTime": 0,
+        "GeographicLatitude": 45,
+        "GlobalShadows": true,
+        "ShadowSoftness": 0.2
+      }
+    },
+    
+    "SoundService": {
+      "$className": "SoundService",
+      "$properties": {
+        "AmbientReverb": "NoReverb",
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+# Roblox/Rojo
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+sourcemap.json
+roblox.lock
+
+# Wally packages
+Packages/
+DevPackages/
+wally.lock
+
+# Build artifacts
+build/
+dist/
+*.zip
+
+# IDE and OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+
+# JetBrains
+.idea/
+
+# Node (if using any JS tooling)
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+coverage/
+test-results/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

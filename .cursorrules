@@ -1,0 +1,131 @@
+# Cursor Rules for L4D2 Roblox Horror Game
+
+## Project Context
+This is a Left 4 Dead 2-style cooperative horror/survival game built for Roblox using Luau. The game features an AI Director pacing system, special infected enemies, 4-player co-op, and procedural room generation.
+
+## Technology Stack
+- **Platform**: Roblox
+- **Language**: Luau (typed Lua variant)
+- **Build Tool**: Rojo v7 (file sync between IDE and Roblox Studio)
+- **Package Manager**: Wally
+- **Linter**: Selene
+- **Formatter**: StyLua
+
+## Architecture Principles
+
+### CRITICAL: Single-Script NPC Management
+NEVER create one script per enemy. All NPCs must be managed by EntityService in a single loop:
+```lua
+-- CORRECT
+for id, entity in EntityService.Entities do
+    entity:Update(dt)
+end
+
+-- WRONG: Individual scripts per enemy
+```
+
+### Server-Authoritative Design
+- All game logic runs on server
+- Never trust client data for health, damage, or position
+- Validate all RemoteEvent data with type checks, NaN checks, rate limiting
+
+### Performance Requirements
+- Target: 60 FPS with 50-100 active NPCs
+- Update throttling: 16 Hz (0.0625s) for AI logic
+- Collision groups: Zombies don't collide with each other
+- SetNetworkOwner(nil) for all server-controlled NPCs
+
+## Code Standards
+
+### Naming Conventions
+- PascalCase: Classes, ModuleScripts, Services (GameService, EntityManager)
+- camelCase: Variables, functions, methods (playerHealth, updateEnemy)
+- UPPER_SNAKE: Constants (MAX_HEALTH, SPAWN_INTERVAL)
+- Prefix private members with underscore (_lastUpdate, _connections)
+
+### Type Annotations
+Always use type annotations for function parameters:
+```lua
+function Enemy:TakeDamage(amount: number, source: Player?)
+    -- implementation
+end
+```
+
+### Service Pattern
+Use singleton services with :Get() accessor:
+```lua
+local GameService = {}
+GameService.__index = GameService
+local _instance = nil
+
+function GameService.new()
+    if _instance then return _instance end
+    local self = setmetatable({}, GameService)
+    _instance = self
+    return self
+end
+
+function GameService:Get()
+    return GameService.new()
+end
+```
+
+### Always Use GetService
+```lua
+-- CORRECT
+local Players = game:GetService("Players")
+
+-- WRONG
+local Players = game.Players
+```
+
+## File Structure
+```
+src/
+├── server/           # Server-only code
+│   ├── Server.lua    # Entry point
+│   └── Services/     # Game services
+├── client/           # Client-only code
+│   ├── Client.lua    # Entry point
+│   └── Controllers/  # UI, input handling
+└── shared/           # Shared between server/client
+    ├── Constants/    # Game constants
+    ├── Types/        # Type definitions
+    └── Utils/        # Utility functions
+```
+
+## Key Systems Reference
+
+### AI Director States
+BuildUp → SustainPeak (3-5s) → PeakFade → Relax (30-45s) → BuildUp
+
+### Intensity Formula
+- Damage taken: +damage × 0.5
+- Incapacitation: +15
+- Nearby kill: +3
+- Decay: -5/second (not during combat)
+
+### Special Infected Types
+Hunter, Smoker, Boomer, Tank, Witch, Charger, Spitter
+
+### Incapacitation Rules
+- 0 HP = Incapacitated (not dead)
+- 300 HP buffer while incapped
+- Bleedout at 1 HP/second
+- 3rd incap = death
+- Revival takes 5 seconds, restores 30 HP
+
+## Documentation
+See /docs folder for detailed implementation guides:
+- ai-director.md - Pacing system
+- enemy-patterns.md - Special infected behaviors
+- performance.md - Optimization patterns
+- multiplayer.md - Co-op mechanics
+
+## When Generating Code
+1. Always include --!strict at the top of files
+2. Use type annotations on all function parameters
+3. Follow the singleton service pattern for services
+4. Use RunService.Heartbeat for game loops (not while loops)
+5. Include proper cleanup in :Destroy() methods
+6. Validate all remote event data on server
