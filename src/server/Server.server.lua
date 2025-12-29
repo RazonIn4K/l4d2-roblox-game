@@ -38,6 +38,7 @@ local function setupRemotes()
 		"GameState",
 		"RevivePlayer",
 		"UseItem",
+		"AttemptRescue",
 	}
 
 	for _, name in remoteNames do
@@ -155,6 +156,38 @@ local function setupChatCommands()
 	print("[Server] Chat commands initialized")
 end
 
+-- Setup rescue remote handler
+local function setupRescueHandler()
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	local attemptRescue = remotes:WaitForChild("AttemptRescue")
+	
+	attemptRescue.OnServerEvent:Connect(function(rescuer: Player, targetPlayer: Player)
+		-- Validate target is a player
+		if not targetPlayer or typeof(targetPlayer) ~= "Instance" then
+			attemptRescue:FireClient(rescuer, false, "Invalid target")
+			return
+		end
+		
+		-- Get PlayerService
+		local Services = script.Parent:WaitForChild("Services") :: Instance
+		local PlayerService = require(Services:WaitForChild("PlayerService") :: any)
+		
+		-- Attempt rescue
+		local success, message = PlayerService:Get():RescueFromPin(rescuer, targetPlayer)
+		
+		-- Send result back to client
+		attemptRescue:FireClient(rescuer, success, message)
+		
+		if success then
+			print(string.format("[Server] %s rescued %s", rescuer.Name, targetPlayer.Name))
+		else
+			print(string.format("[Server] Rescue failed: %s", message))
+		end
+	end)
+	
+	print("[Server] Rescue handler initialized")
+end
+
 -- Initialize services
 local function initializeServices()
 	local Server = script.Parent :: Instance
@@ -190,6 +223,7 @@ setupCollisionGroups()
 setupRemotes()
 setupWorkspace()
 setupChatCommands()
+setupRescueHandler()
 initializeServices()
 
 print("[Server] Server ready!")
