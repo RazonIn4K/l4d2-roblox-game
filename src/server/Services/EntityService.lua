@@ -15,6 +15,8 @@ local Smoker = nil
 local Boomer = nil
 local Tank = nil
 local Witch = nil
+local Charger = nil
+local Spitter = nil
 
 -- Types
 export type EntityState = "Idle" | "Patrol" | "Chase" | "Attack" | "Stagger" | "Dead"
@@ -750,7 +752,115 @@ function EntityService:SpawnWitch(model: Model, position: Vector3): any
 	return witch
 end
 
--- Rescue a player from special infected (Hunter pin or Smoker grab)
+function EntityService:SpawnCharger(model: Model, position: Vector3): any
+	-- Lazy load Charger class
+	if not Charger then
+		Charger = require(script.Parent.Entities:WaitForChild("Charger"))
+	end
+
+	-- Clone and position model
+	local clone = model:Clone()
+	clone:PivotTo(CFrame.new(position))
+	local enemiesFolder = workspace:FindFirstChild("Enemies")
+	if not enemiesFolder then
+		enemiesFolder = Instance.new("Folder")
+		enemiesFolder.Name = "Enemies"
+		enemiesFolder.Parent = workspace
+	end
+	clone.Parent = enemiesFolder
+
+	local humanoid = clone:FindFirstChildOfClass("Humanoid")
+	local rootPart = clone:FindFirstChild("HumanoidRootPart") or clone.PrimaryPart
+
+	if humanoid then
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+	end
+	if rootPart then
+		rootPart:SetNetworkOwner(nil)
+	end
+
+	for _, part in clone:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CollisionGroup = "Zombies"
+		end
+	end
+
+	-- Create Charger instance
+	local charger = Charger.new(clone)
+
+	-- Store reference
+	local id = tostring(self._nextId)
+	self._nextId += 1
+	clone:SetAttribute("EntityId", id)
+	clone:SetAttribute("EntityType", "Charger")
+
+	-- Store in special entities table
+	if not self.SpecialEntities then
+		self.SpecialEntities = {}
+	end
+	self.SpecialEntities[id] = charger
+
+	print(string.format("[EntityService] Spawned Charger with ID %s at %s", id, tostring(position)))
+	return charger
+end
+
+function EntityService:SpawnSpitter(model: Model, position: Vector3): any
+	-- Lazy load Spitter class
+	if not Spitter then
+		Spitter = require(script.Parent.Entities:WaitForChild("Spitter"))
+	end
+
+	-- Clone and position model
+	local clone = model:Clone()
+	clone:PivotTo(CFrame.new(position))
+	local enemiesFolder = workspace:FindFirstChild("Enemies")
+	if not enemiesFolder then
+		enemiesFolder = Instance.new("Folder")
+		enemiesFolder.Name = "Enemies"
+		enemiesFolder.Parent = workspace
+	end
+	clone.Parent = enemiesFolder
+
+	local humanoid = clone:FindFirstChildOfClass("Humanoid")
+	local rootPart = clone:FindFirstChild("HumanoidRootPart") or clone.PrimaryPart
+
+	if humanoid then
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+	end
+	if rootPart then
+		rootPart:SetNetworkOwner(nil)
+	end
+
+	for _, part in clone:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CollisionGroup = "Zombies"
+		end
+	end
+
+	-- Create Spitter instance
+	local spitter = Spitter.new(clone)
+
+	-- Store reference
+	local id = tostring(self._nextId)
+	self._nextId += 1
+	clone:SetAttribute("EntityId", id)
+	clone:SetAttribute("EntityType", "Spitter")
+
+	-- Store in special entities table
+	if not self.SpecialEntities then
+		self.SpecialEntities = {}
+	end
+	self.SpecialEntities[id] = spitter
+
+	print(string.format("[EntityService] Spawned Spitter with ID %s at %s", id, tostring(position)))
+	return spitter
+end
+
+-- Rescue a player from special infected (Hunter pin, Smoker grab, or Charger grab)
 function EntityService:RescuePinnedPlayer(rescuer: Player, victim: Player): boolean
 	local victimChar = victim.Character
 	if not victimChar then
@@ -768,13 +878,14 @@ function EntityService:RescuePinnedPlayer(rescuer: Player, victim: Player): bool
 		end
 	end
 
-	-- Check for Smoker grab
+	-- Check for Smoker or Charger grab
 	local grabbedBy = victimChar:GetAttribute("GrabbedBy")
 	if grabbedBy and self.SpecialEntities then
-		local smoker = self.SpecialEntities[grabbedBy]
-		if smoker and smoker.Rescue then
-			smoker:Rescue()
-			print(string.format("[EntityService] %s rescued %s from Smoker", rescuer.Name, victim.Name))
+		local grabber = self.SpecialEntities[grabbedBy]
+		if grabber and grabber.Rescue then
+			local entityType = grabber.Type or "Special"
+			grabber:Rescue()
+			print(string.format("[EntityService] %s rescued %s from %s", rescuer.Name, victim.Name, entityType))
 			return true
 		end
 	end

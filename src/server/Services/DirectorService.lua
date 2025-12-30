@@ -55,7 +55,10 @@ function DirectorService.new()
 		Hunter = 0,
 		Smoker = 0,
 		Boomer = 0,
+		Charger = 0,
+		Spitter = 0,
 		Tank = 0,
+		Witch = 0,
 	}
 
 	-- Tracking
@@ -372,7 +375,10 @@ function DirectorService:CanSpawnSpecial(specialType: string): boolean
 		Hunter = 2,
 		Smoker = 2,
 		Boomer = 1,
+		Charger = 2,
+		Spitter = 2,
 		Tank = 1, -- Only one Tank at a time
+		Witch = 1, -- Only one Witch at a time
 	}
 
 	local maxCount = MAX_SPECIALS[specialType] or 1
@@ -436,6 +442,24 @@ function DirectorService:SpawnSpecial(specialType: string)
 		local tank = EntityService:Get():SpawnTank(specialModel, spawnPosition)
 		if tank then
 			print(string.format("[Director] Spawned Tank at %s", tostring(spawnPosition)))
+		end
+		return
+	elseif specialType == "Witch" then
+		local witch = EntityService:Get():SpawnWitch(specialModel, spawnPosition)
+		if witch then
+			print(string.format("[Director] Spawned Witch at %s", tostring(spawnPosition)))
+		end
+		return
+	elseif specialType == "Charger" then
+		local charger = EntityService:Get():SpawnCharger(specialModel, spawnPosition)
+		if charger then
+			print(string.format("[Director] Spawned Charger at %s", tostring(spawnPosition)))
+		end
+		return
+	elseif specialType == "Spitter" then
+		local spitter = EntityService:Get():SpawnSpitter(specialModel, spawnPosition)
+		if spitter then
+			print(string.format("[Director] Spawned Spitter at %s", tostring(spawnPosition)))
 		end
 		return
 	end
@@ -523,6 +547,20 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 		zombieModelCache["Boomer"] = boomerModel
 		print("[Director] Created Boomer model via EntityFactory")
 		return boomerModel
+	end
+
+	if specialType == "Charger" then
+		local chargerModel = EntityFactory.createCharger()
+		zombieModelCache["Charger"] = chargerModel
+		print("[Director] Created Charger model via EntityFactory")
+		return chargerModel
+	end
+
+	if specialType == "Spitter" then
+		local spitterModel = EntityFactory.createSpitter()
+		zombieModelCache["Spitter"] = spitterModel
+		print("[Director] Created Spitter model via EntityFactory")
+		return spitterModel
 	end
 
 	-- Fallback: Create a colored variant for unknown specials

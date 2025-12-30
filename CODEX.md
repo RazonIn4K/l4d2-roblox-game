@@ -1,323 +1,319 @@
-# CODEX.md
+# Architecture Overview - L4D2 Roblox Game
 
-This file provides guidance to Codex CLI (OpenAI Codex) when working with code in this repository.
+## System Architecture Visual
 
-## Project Summary
-Building a Left 4 Dead 2-inspired cooperative horror/survival game in Roblox using Luau. The game features 4-player co-op, an AI Director pacing system, special infected enemies (Hunter, Smoker, Boomer, Tank, Witch, Charger, Spitter), incapacitation/revival mechanics, procedural room generation, and horror atmosphere systems.
-
-## Development Environment
-
-### Required Tools
-```bash
-# Install Rokit (Roblox toolchain manager)
-# Then add tools:
-rokit add rojo-rbx/rojo       # File sync (IDE ↔ Studio)
-rokit add UpliftGames/wally   # Package manager
-rokit add kampfkarren/selene  # Linter
-rokit add JohnnyMorganz/StyLua # Formatter
 ```
+                              ┌──────────────────────────────────────────────────────────────┐
+                              │                      ROBLOX ENGINE                            │
+                              └──────────────────────────────────────────────────────────────┘
+                                                          │
+                    ┌─────────────────────────────────────┴─────────────────────────────────────┐
+                    │                                                                           │
+           ┌────────▼────────┐                                                        ┌────────▼────────┐
+           │     SERVER      │                                                        │     CLIENT      │
+           │ ServerScript    │                                                        │ LocalScript     │
+           │    Service      │                                                        │   Scripts       │
+           └────────┬────────┘                                                        └────────┬────────┘
+                    │                                                                          │
+     ┌──────────────┴──────────────────────────────────────┐              ┌───────────────────┴──────────────────┐
+     │                                                     │              │                                      │
+┌────▼────┐                                          ┌─────▼─────┐  ┌─────▼─────┐                          ┌─────▼─────┐
+│ Server  │                                          │  Remotes  │  │ Remotes   │                          │  Client   │
+│ .server │                                          │   (TX)    │  │   (RX)    │                          │  .client  │
+│  .lua   │                                          │           │  │           │                          │   .lua    │
+└────┬────┘                                          └───────────┘  └───────────┘                          └─────┬─────┘
+     │                                                                                                           │
+     │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │  │                                        SERVICE LAYER                                                      │
+     │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+     │                                                                                                           │
+     ├──────────────────────────────────────────────────────────────────────┐                                   │
+     │                                                                      │                                   │
+┌────▼─────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌──────────▼───────┐              ┌─────────────▼─────────────┐
+│   GameService    │  │ PlayerService   │  │  WeaponService  │  │   EntityService  │              │      UIController         │
+│                  │  │                 │  │                 │  │                  │              │                           │
+│ • State Machine  │  │ • Health/Incap  │  │ • Pistol Logic  │  │ • NPC Management │              │ • Health Bar              │
+│ • Lobby→Playing  │  │ • Revival       │  │ • Hit Detection │  │ • Update Loop    │              │ • Teammate Cards          │
+│ • SafeRoom Logic │  │ • Rescue        │  │ • Ammo System   │  │ • Single Script! │              │ • Incap Overlay           │
+│ • Win/Lose       │  │ • DamagePlayer  │  │ • Fire Results  │  │ • 16Hz Throttle  │              │ • Revive Progress         │
+└────────┬─────────┘  └────────┬────────┘  └────────┬────────┘  └────────┬─────────┘              │ • Death Screen            │
+         │                     │                    │                    │                        │ • Game Notifications      │
+         │                     │                    │                    │                        └─────────────┬─────────────┘
+         │                     │                    │                    │                                      │
+         │           ┌─────────┴───────┐            │                    │                        ┌─────────────┼─────────────┐
+         │           │                 │            │                    │                        │             │             │
+         │    ┌──────▼──────┐   ┌──────▼──────┐     │           ┌───────▼────────┐        ┌──────▼──────┐ ┌────▼────┐ ┌──────▼──────┐
+         │    │SafeRoomSvc  │   │SpawnPointSvc│     │           │ EntityFactory  │        │AmbientSound │ │Damage   │ │HorrorLight │
+         │    │             │   │             │     │           │                │        │Controller   │ │Feedback │ │Controller  │
+         │    │ • Triggers  │   │ • Registers │     │           │ • createHunter │        │             │ │Ctrl     │ │            │
+         │    │ • Healing   │   │ • GetSpawn  │     │           │ • createTank   │        │ • Ambient   │ │         │ │ • Fog      │
+         │    │ • Incap Rst │   │ • Filtering │     │           │ • createBoomer │        │ • Heartbeat │ │ • Vign. │ │ • Color    │
+         └────│─────────────│───│─────────────│─────│───────────│ • createSmoker │        │ • Horror    │ │ • Shake │ │ • Flicker  │
+              └─────────────┘   └──────┬──────┘     │           │ • createWitch  │        │   Stings    │ │ • HitMk │ │ • Tint     │
+                                       │           │           │ • createCharger│        └─────────────┘ └─────────┘ └────────────┘
+                                       │           │           │ • createSpitter│
+                                       │           │           │ • createCommon │
+                                       │           │           └───────┬────────┘
+                                       │           │                   │
+                    ┌──────────────────┴───────────┴───────────────────┴───────────────────────────────────────────────┐
+                    │                                      DirectorService                                             │
+                    │                                                                                                  │
+                    │   ┌─────────────┐    ┌─────────────────────────────────────────────────────────────────────┐     │
+                    │   │  AI States  │    │                      ENTITY SPAWNING                                │     │
+                    │   │             │    │                                                                     │     │
+                    │   │  BuildUp    │    │  SpawnPoints ──► LOS Check ──► Behind Player (75%) ──► Spawn      │     │
+                    │   │     │       │    │                                                                     │     │
+                    │   │     ▼       │    │  ┌──────────────────────────────────────────────────────────────┐  │     │
+                    │   │ SustainPeak │    │  │ SPAWN TIMERS & LIMITS                                        │  │     │
+                    │   │  (3-5s)     │    │  │                                                              │  │     │
+                    │   │     │       │    │  │  Common:  90-180s intervals, Max 30 active                  │  │     │
+                    │   │     ▼       │    │  │  Hunter:  15-30s, Max 2                                     │  │     │
+                    │   │  PeakFade   │    │  │  Smoker:  15-30s, Max 2                                     │  │     │
+                    │   │     │       │    │  │  Boomer:  15-30s, Max 1                                     │  │     │
+                    │   │     ▼       │    │  │  Tank:    120-180s, Max 1 (boss)                            │  │     │
+                    │   │   Relax     │    │  │  Witch:   90-120s, Max 1 (ambient)                          │  │     │
+                    │   │  (30-45s)   │    │  │  Charger: 15-30s, Max 2                                     │  │     │
+                    │   │     │       │    │  │  Spitter: 15-30s, Max 2                                     │  │     │
+                    │   │     ▼       │    │  └──────────────────────────────────────────────────────────────┘  │     │
+                    │   │  (repeat)   │    │                                                                     │     │
+                    │   └─────────────┘    └─────────────────────────────────────────────────────────────────────┘     │
+                    │                                                                                                  │
+                    │   ┌─────────────────────────────────────────────────────────────────────────────────────────┐    │
+                    │   │ INTENSITY TRACKING                                                                      │    │
+                    │   │   • Damage taken: +damage × 0.5    • Zombie killed: +3                                 │    │
+                    │   │   • Incap: +15                     • Decay: -5/sec when not in combat                  │    │
+                    │   │   • Peak threshold: 70             • Triggers BuildUp → SustainPeak transition         │    │
+                    │   └─────────────────────────────────────────────────────────────────────────────────────────┘    │
+                    └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-### Commands
-```bash
-rokit install           # Install/update all tools (first time setup)
-rojo serve              # Start file sync server
-rojo build -o game.rbxl # Build place file
-wally install           # Install dependencies
-selene src/             # Lint code
-stylua src/             # Format code
-```
 
-### IDE Setup
-1. Install Rojo plugin in Roblox Studio
-2. Run `rojo serve` in terminal
-3. Connect via Rojo plugin in Studio
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                              ENTITY HIERARCHY                                                     │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-## Architecture Overview
+                                              ┌────────────────────┐
+                                              │     BaseEnemy      │
+                                              │                    │
+                                              │ • Update(dt)       │
+                                              │ • TransitionTo()   │
+                                              │ • DetectTarget()   │
+                                              │ • MoveToTarget()   │
+                                              │ • TakeDamage()     │
+                                              │ • Die()            │
+                                              │ • HasLineOfSight() │
+                                              │ • Bile Attraction  │
+                                              └─────────┬──────────┘
+                                                        │
+        ┌───────────────┬───────────────┬───────────────┼───────────────┬───────────────┬───────────────┐
+        │               │               │               │               │               │               │
+  ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
+  │  Hunter   │   │  Smoker   │   │  Boomer   │   │   Tank    │   │   Witch   │   │  Charger  │   │  Spitter  │
+  │           │   │           │   │           │   │           │   │           │   │           │   │           │
+  │ HP: 250   │   │ HP: 250   │   │ HP: 50    │   │ HP: 6000  │   │ HP: 1000  │   │ HP: 600   │   │ HP: 100   │
+  │           │   │           │   │           │   │           │   │           │   │           │   │           │
+  │ States:   │   │ States:   │   │ States:   │   │ States:   │   │ States:   │   │ States:   │   │ States:   │
+  │ • Idle    │   │ • Idle    │   │ • Idle    │   │ • Idle    │   │ • Idle    │   │ • Idle    │   │ • Idle    │
+  │ • Stalk   │   │ • Stalk   │   │ • Chase   │   │ • Chase   │   │ • Startled│   │ • Chase   │   │ • Chase   │
+  │ • Crouch  │   │ • Aim     │   │ • Vomit   │   │ • Attack  │   │ • Attack  │   │ • WindUp  │   │ • Spit    │
+  │ • Pounce  │   │ • Grab    │   │ • Attack  │   │ • RockThr │   │ • Dead    │   │ • Charge  │   │ • Flee    │
+  │ • Pinning │   │ • Dragging│   │ • Stagger │   │ • Rage    │   │           │   │ • Slamming│   │ • Stagger │
+  │ • Stagger │   │ • Stagger │   │ • Dead    │   │ • Stagger │   │ Mechanic: │   │ • Stagger │   │ • Dead    │
+  │ • Dead    │   │ • Dead    │   │           │   │ • Dead    │   │ Startle & │   │ • Dead    │   │           │
+  │           │   │           │   │ Mechanic: │   │           │   │ instant   │   │           │   │ Mechanic: │
+  │ Mechanic: │   │ Mechanic: │   │ Explode   │   │ Mechanic: │   │ incap on  │   │ Mechanic: │   │ Acid spit │
+  │ Pounce &  │   │ Tongue    │   │ on death, │   │ Rock thr, │   │ attacker  │   │ Charge &  │   │ creates   │
+  │ pin until │   │ grab from │   │ bile attr │   │ rage mode │   │           │   │ grab, +   │   │ DOT pool  │
+  │ rescued   │   │ distance  │   │ zombies   │   │ ground pd │   │           │   │ slam loop │   │ (8 dmg/s) │
+  └───────────┘   └───────────┘   └───────────┘   └───────────┘   └───────────┘   └───────────┘   └───────────┘
 
-### Directory Structure
-```
-src/
-├── server/                    # Server-only → ServerScriptService/Server
-│   ├── Server.server.lua     # Entry point (note: .server.lua suffix)
-│   └── Services/
-│       ├── EntityService.lua  # ALL NPC management (critical!)
-│       ├── DirectorService.lua
-│       ├── GameService.lua
-│       ├── PlayerService.lua
-│       ├── SpawnPointService.lua
-│       ├── WeaponService.lua
-│       └── Entities/
-│           └── Hunter.lua
-├── client/                    # Client-only → StarterPlayerScripts/Client
-│   ├── Client.client.lua     # Entry point (note: .client.lua suffix)
-│   └── Controllers/
-│       └── UIController.lua
-└── shared/                    # Shared → ReplicatedStorage/Shared
-    └── Constants/
-        └── GameConstants.lua
-```
 
-### Rojo Mapping (default.project.json)
-- `src/server/` → `ServerScriptService/Server`
-- `src/client/` → `StarterPlayerScripts/Client`
-- `src/shared/` → `ReplicatedStorage/Shared`
-- `Packages/` → `ReplicatedStorage/Packages`
-- Remote events live in `ReplicatedStorage/Remotes`
-- NPCs parent to `Workspace/Enemies`
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                          DATA FLOW: REMOTE EVENTS                                                │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-### Core Services
+                           SERVER                                              CLIENT
 
-#### EntityService (CRITICAL)
-Manages ALL NPCs in a single script. This is the #1 performance requirement.
-```lua
-local EntityService = {}
-EntityService.Entities = {}
+                    ┌─────────────────┐                                 ┌─────────────────┐
+                    │  WeaponService  │◄────── FireWeapon ──────────────│  Input Handler  │
+                    │                 │─────── FireResult ─────────────►│                 │
+                    │                 │─────── AmmoUpdate ─────────────►│                 │
+                    └─────────────────┘                                 └─────────────────┘
 
-RunService.Heartbeat:Connect(function(dt)
-    for id, entity in EntityService.Entities do
-        entity:Update(dt)
-    end
-end)
-```
+                    ┌─────────────────┐                                 ┌─────────────────┐
+                    │  PlayerService  │◄────── AttemptRescue ───────────│  Rescue Prompt  │
+                    │                 │─────── GameState ──────────────►│                 │
+                    │                 │  (TeamHealth, Incap, Revived)   │  UIController   │
+                    └─────────────────┘                                 └─────────────────┘
 
-#### DirectorService (AI Director)
-Controls game pacing through intensity tracking and spawn management.
+                    ┌─────────────────┐                                 ┌─────────────────┐
+                    │  GameService    │─────── GameState ──────────────►│  State Display  │
+                    │                 │  (Playing, SafeRoom, Victory)   │                 │
+                    └─────────────────┘                                 └─────────────────┘
 
-**States:** BuildUp → SustainPeak (3-5s) → PeakFade → Relax (30-45s) → repeat
+                    ┌─────────────────┐                                 ┌─────────────────┐
+                    │ DirectorService │─────── GameState ──────────────►│  Lighting/Sound │
+                    │                 │  (BuildUp, Crescendo)           │  Controllers    │
+                    └─────────────────┘                                 └─────────────────┘
 
-**Intensity Sources:**
-- Damage taken: +damage × 0.5
-- Player incapacitated: +15
-- Nearby zombie killed: +3
-- Decay: -5/second when not in combat
 
-#### GameService
-Manages game state machine: Lobby → Loading → Playing → SafeRoom → Finale → Victory/Failed
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                          FILE STRUCTURE                                                          │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-### Service Initialization Order
-In Server.server.lua, services start in this order (dependencies matter):
-1. GameService
-2. PlayerService
-3. SpawnPointService (must be before DirectorService)
-4. EntityService
-5. WeaponService
-6. DirectorService
+     src/
+     ├── server/                                    → ServerScriptService/Server
+     │   ├── Server.server.lua                     # Entry point, collision groups, remotes, service init
+     │   └── Services/
+     │       ├── GameService.lua         (248 ln)  # Game state machine
+     │       ├── PlayerService.lua       (589 ln)  # Health, incap, revival, rescue
+     │       ├── EntityService.lua       (480 ln)  # NPC management, spawn functions
+     │       ├── DirectorService.lua     (669 ln)  # AI Director, pacing, spawn logic
+     │       ├── WeaponService.lua       (269 ln)  # Weapons, hit detection
+     │       ├── SafeRoomService.lua     (165 ln)  # Safe room triggers/healing
+     │       ├── SpawnPointService.lua   (169 ln)  # Spawn point registration
+     │       ├── EntityFactory.lua       (865 ln)  # Model creation for all entities
+     │       ├── BaseEnemy.lua           (312 ln)  # Base class for all NPCs
+     │       └── Entities/
+     │           ├── Hunter.lua          (487 ln)  # Pounce + pin mechanic
+     │           ├── Smoker.lua          (502 ln)  # Tongue grab + drag
+     │           ├── Boomer.lua          (511 ln)  # Explosion + bile attraction
+     │           ├── Tank.lua            (698 ln)  # Boss, rock throw, rage
+     │           ├── Witch.lua           (546 ln)  # Startle + instant incap
+     │           ├── Charger.lua         (726 ln)  # Charge + grab + slam
+     │           └── Spitter.lua         (559 ln)  # Acid projectile + DOT pool
+     │
+     ├── client/                                    → StarterPlayerScripts/Client
+     │   ├── Client.client.lua           (484 ln)  # Entry, input, shooting, flashlight
+     │   └── Controllers/
+     │       ├── UIController.lua        (918 ln)  # All HUD elements
+     │       ├── AmbientSoundController.lua (284 ln)  # Horror sounds, heartbeat
+     │       ├── DamageFeedbackController.lua (488 ln) # Vignette, hit markers, shake
+     │       └── HorrorLightingController.lua (406 ln) # Fog, color correction, flicker
+     │
+     └── shared/                                    → ReplicatedStorage/Shared
+         └── Constants/
+             └── GameConstants.lua        (52 ln)  # Shared constants
 
-## Code Standards
+     Total: ~8,000 lines of Luau code
 
-### File Header
-```lua
---!strict
---[[
-    ModuleName
-    Brief description
-]]
-```
 
-### Naming Conventions
-| Type | Convention | Example |
-|------|------------|---------|
-| Classes/Modules | PascalCase | `EntityService` |
-| Functions/Variables | camelCase | `updateEnemy` |
-| Constants | UPPER_SNAKE | `MAX_HEALTH` |
-| Private members | _prefix | `_lastUpdate` |
-| Types | PascalCase | `EntityState` |
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                          GAME STATE MACHINE                                                      │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-### Required Patterns
+     ┌─────────┐     All players      ┌─────────┐    Map loaded     ┌─────────┐
+     │  Lobby  │────────ready────────►│ Loading │──────────────────►│ Playing │
+     └─────────┘                       └─────────┘                   └────┬────┘
+                                                                          │
+                                           ┌──────────────────────────────┤
+                                           │                              │
+                                           ▼                              ▼
+                                    ┌───────────┐                   ┌───────────┐
+                                    │  SafeRoom │                   │  Failed   │
+                                    │           │                   │ (all dead)│
+                                    └─────┬─────┘                   └───────────┘
+                                          │
+                      All players ready   │
+                           ┌──────────────┴──────────────┐
+                           ▼                              ▼
+                    ┌───────────┐                   ┌───────────┐
+                    │  Playing  │                   │  Finale   │──────►┌─────────┐
+                    │(next map) │                   │           │       │ Victory │
+                    └───────────┘                   └───────────┘       └─────────┘
 
-**Always use GetService:**
-```lua
-local Players = game:GetService("Players")  -- Correct
-local Players = game.Players                 -- Wrong
-```
 
-**Always type annotate parameters:**
-```lua
-function Enemy:TakeDamage(amount: number, source: Player?)
-```
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                          INCAPACITATION FLOW                                                     │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-**Singleton Service Pattern:**
-```lua
-local Service = {}
-Service.__index = Service
-local _instance = nil
+     ┌────────────┐     0 HP      ┌──────────────┐    Bleedout     ┌────────────┐
+     │   Alive    │──────────────►│ Incapacitated│───────────────►│    Dead    │
+     │  (100 HP)  │               │  (300 HP buf)│   (-1 HP/sec)   │            │
+     └────────────┘               └───────┬──────┘                 └────────────┘
+                                          │
+                                     Revived (5s)
+                                     +30 HP
+                                          │
+                                          ▼
+                                   ┌────────────┐
+                                   │   Alive    │
+                                   │  (30 HP)   │
+                                   │  Incaps++  │
+                                   └────────────┘
 
-function Service.new()
-    if _instance then return _instance end
-    local self = setmetatable({}, Service)
-    -- Initialize
-    _instance = self
-    return self
-end
+     Max Incaps: 2 (3rd = permanent death)
+     Safe Room: Resets incap count, heals to 50 HP minimum
 
-function Service:Get()
-    return Service.new()
-end
-```
 
-**Update Throttling:**
-```lua
-function Entity:Update(dt: number)
-    local now = os.clock()
-    if now - self._lastUpdate < 0.0625 then return end  -- 16 Hz
-    self._lastUpdate = now
-    -- AI logic
-end
-```
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+     │                                      SPECIAL INFECTED COMPARISON                                                  │
+     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-## Performance Requirements
+     ┌──────────┬────────┬────────────────┬─────────────────────────────────────────────────────────────────────────────┐
+     │ Infected │   HP   │  Role          │  Mechanic                                                                   │
+     ├──────────┼────────┼────────────────┼─────────────────────────────────────────────────────────────────────────────┤
+     │ Hunter   │   250  │ Assassin       │ Pounces from distance, pins and damages until teammate rescues             │
+     │ Smoker   │   250  │ Crowd Control  │ Tongue grabs from 50 studs, drags victim toward it                         │
+     │ Boomer   │    50  │ Disruptor      │ Explodes on death, bile attracts all common infected to covered players    │
+     │ Tank     │  6000  │ Boss           │ Massive HP, throws rocks, enters rage mode when frustrated                 │
+     │ Witch    │  1000  │ Avoidance      │ Stationary until startled, then instantly incapacitates the disturber      │
+     │ Charger  │   600  │ Bruiser        │ Charges through group, grabs one, slams repeatedly                         │
+     │ Spitter  │   100  │ Area Denial    │ Spits acid that creates damaging pool (8 dmg/sec for 8 sec)                │
+     └──────────┴────────┴────────────────┴─────────────────────────────────────────────────────────────────────────────┘
 
-### Targets
-- 60 FPS with 50-100 active NPCs
-- <25 KB/s network per player
-- <512 MB memory
 
-### Mandatory Optimizations
-
-1. **Single-script NPC management** - Never one script per enemy
-2. **Collision groups** - Zombies don't collide with zombies
-3. **Disable unused Humanoid states:**
-```lua
-humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-```
-4. **Server network ownership:**
-```lua
-part:SetNetworkOwner(nil)
-```
-5. **Leader-follower pathfinding** - Only 20% compute paths, rest follow
-
-## Network Security
-
-### Remote Event Validation (Server)
-```lua
-Remote.OnServerEvent:Connect(function(player, targetId, damage)
-    -- Rate limit
-    if not RateLimit:Check(player) then return end
-    
-    -- Type validation
-    if typeof(targetId) ~= "number" then return end
-    if typeof(damage) ~= "number" then return end
-    
-    -- NaN check
-    if damage ~= damage then return end
-    
-    -- Sanity check
-    if damage < 0 or damage > 1000 then return end
-    
-    -- Process...
-end)
-```
-
-## Key Game Mechanics
-
-### Incapacitation System
-- 0 HP → Incapacitated (not dead)
-- 300 HP buffer while incapped
-- Bleedout: -1 HP/second
-- Revival: 5 seconds, restores 30 HP
-- 3rd incap → Death
-- Safe room resets incap count
-
-### AI Director Spawn Rules
-- Never spawn in player line-of-sight
-- 75% spawn behind players
-- Commons: 90-180s wave interval
-- Specials: Individual 15-30s timers
-- Max 2-4 specials active
-
-### Safe Room
-- Heals players to 50 HP minimum
-- Resets incap count
-- Director pauses spawning
-- Exit requires all players ready
-
-## Documentation
-Detailed implementation guides in `/docs/`:
-- `ai-director.md` - Complete pacing system
-- `enemy-patterns.md` - All special infected behaviors
-- `horror-atmosphere.md` - Lighting, sound, effects
-- `multiplayer.md` - Co-op, weapons, revival
-- `performance.md` - Optimization patterns
-- `procedural-generation.md` - Room system
-- `luau-cheatsheet.md` - Luau language reference
-- `roblox-services.md` - Roblox API reference
-
-## When Generating Code
-
-### Always Include
-1. `--!strict` at file top
-2. Type annotations on function parameters
-3. Proper error handling
-4. Connection cleanup in `:Destroy()`
-5. Update throttling for AI
-
-### Never Do
-1. One script per NPC
-2. Trust client data
-3. Use `while true do` for game loops (use RunService)
-4. Direct property access instead of GetService
-5. Forget network ownership for NPCs
-
-## Quick Reference
-
-### Entity FSM States
-`Idle | Patrol | Chase | Attack | Stagger | Dead`
-
-Hunter-specific states: `Stalk | Crouch | Pounce | Pinning | Stunned`
-
-### Special Infected
-| Type | Mechanic | HP |
-|------|----------|-----|
-| Hunter | Pounce + Pin | 250 |
-| Smoker | Tongue grab + Drag | 250 |
-| Boomer | Explosion + Bile attract | 50 |
-| Tank | Boss, rock throw | 6000 |
-| Witch | Avoidance, 1-shot | 1000 |
-| Charger | Charge + Slam | 600 |
-| Spitter | Acid pool DOT | 100 |
-
-### Collision Groups
-Configured in Server.server.lua:
-- `Players` - Player characters
-- `Zombies` - All NPCs (self-collision disabled for performance)
-- `Projectiles` - Bullets, etc.
-- `Debris` - Non-gameplay elements
-
-### Remote Events
-Created in `ReplicatedStorage/Remotes`:
-`DealDamage`, `PlayerAction`, `EntityUpdate`, `GameState`, `RevivePlayer`, `UseItem`, `AttemptRescue`, `FireWeapon`, `FireResult`, `AmmoUpdate`
-
-### Weapon Slots
-Primary, Secondary (Pistol, infinite), Throwable, Medical
-
-## Test Commands (Chat)
-| Command | Action |
-|---------|--------|
-| `/test` | Spawn 5 common zombies around player |
-| `/hunter` | Spawn a Hunter 20 studs in front |
-| `/kill` | Kill all enemies |
-| `/heal` | Heal player to full health |
-
-## Current Implementation Status
+## Implementation Status
 
 ### Completed Systems
-- **EntityService** - Single-script NPC management with update loop
-- **DirectorService** - AI Director with pacing states
-- **WeaponService** - Pistol with server-authoritative hit detection
-- **PlayerService** - Health, incap, revival, rescue from pin
-- **Hunter** - Full state machine (Stalk→Crouch→Pounce→Pinning)
-- **UIController** - Health bar, teammate cards, incap overlay
-- **Test Environment** - 3-room layout with spawn points
 
-### Test Environment Layout
-```
-Start Room (40x40) → Corridor (20x60) → Safe Room (30x30)
-   (0,0,0)              (50,0,0)           (95,0,0)
+| System | Status | File(s) | Notes |
+|--------|--------|---------|-------|
+| Server Entry | Done | Server.server.lua | Collision groups, remotes, service init |
+| Game State | Done | GameService.lua | State machine with transitions |
+| Player Health | Done | PlayerService.lua | Incap, revival, rescue, bleedout |
+| Entity Management | Done | EntityService.lua | Single-script NPC updates at 16Hz |
+| AI Director | Done | DirectorService.lua | Pacing states, spawn control |
+| Weapons | Done | WeaponService.lua | Server-authoritative hit detection |
+| Safe Rooms | Done | SafeRoomService.lua | Healing, incap reset |
+| Spawn Points | Done | SpawnPointService.lua | Registration and filtering |
+| Entity Factory | Done | EntityFactory.lua | Model creation for all 8 entity types |
+| Hunter | Done | Hunter.lua | Full pounce/pin mechanic |
+| Smoker | Done | Smoker.lua | Tongue grab + drag |
+| Boomer | Done | Boomer.lua | Explosion + bile attraction |
+| Tank | Done | Tank.lua | Rock throw + rage mode |
+| Witch | Done | Witch.lua | Startle + instant incap |
+| Charger | Done | Charger.lua | Charge + slam loop |
+| Spitter | Done | Spitter.lua | Acid pools with DOT |
+| Client Entry | Done | Client.client.lua | Input, shooting, flashlight |
+| UI | Done | UIController.lua | Health, teammates, incap, notifications |
+| Ambient Sound | Done | AmbientSoundController.lua | Horror atmosphere |
+| Damage Feedback | Done | DamageFeedbackController.lua | Vignette, shake, hit markers |
+| Horror Lighting | Done | HorrorLightingController.lua | Fog, color, flicker |
+
+### Test Commands
+
+| Command | Effect |
+|---------|--------|
+| `/test` | Spawn 5 common zombies around player |
+| `/hunter` | Spawn Hunter 20 studs ahead |
+| `/kill` | Kill all enemies |
+| `/heal` | Heal to full HP |
+
+### Verification
+
+```bash
+# Lint (0 errors, 1 warning in Tank.lua)
+selene src/
+
+# Build (success)
+rojo build -o game.rbxl
 ```
 
-### Spawn Points
-- 4 Common in Start Room corners
-- 2 Common in Corridor
-- 1 Special in Corridor (for Hunter)
-- None in Safe Room
+## Key Design Decisions
+
+1. **Single-Script NPC Management**: All NPCs managed by EntityService with one Heartbeat loop for performance
+2. **Lazy-Loaded Services**: Entity files use `getPlayerService()` pattern to avoid circular dependencies
+3. **State Machine Pattern**: Every special infected uses explicit state transitions with `TransitionTo()`
+4. **Server Authority**: All damage, spawning, and game state controlled server-side
+5. **16Hz Update Throttle**: AI logic runs at 16Hz instead of every frame for performance
+6. **Bile Attraction**: BaseEnemy detects "IsBiled" attribute for Boomer synergy
