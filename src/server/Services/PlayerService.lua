@@ -75,8 +75,38 @@ end
 function PlayerService:SetupRemotes()
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 
+	-- Rate limiting for revive requests
+	local REVIVE_COOLDOWN = 0.25 -- seconds between revive requests
+	local lastReviveRequest: { [Player]: number } = {}
+
+	-- Cleanup on player leave
+	table.insert(
+		self._connections,
+		Players.PlayerRemoving:Connect(function(player)
+			lastReviveRequest[player] = nil
+		end)
+	)
+
 	local reviveRemote = remotes:WaitForChild("RevivePlayer")
 	reviveRemote.OnServerEvent:Connect(function(player, targetPlayer, action)
+		-- Rate limit check
+		local now = os.clock()
+		local lastRequest = lastReviveRequest[player] or 0
+		if now - lastRequest < REVIVE_COOLDOWN then
+			return -- Silent reject - too fast
+		end
+		lastReviveRequest[player] = now
+
+		if typeof(action) ~= "string" then
+			return
+		end
+		if typeof(targetPlayer) ~= "Instance" or not targetPlayer:IsA("Player") then
+			return
+		end
+		if targetPlayer == player then
+			return
+		end
+
 		if action == "start" then
 			self:StartRevive(player, targetPlayer)
 		elseif action == "cancel" then
@@ -353,12 +383,14 @@ end
 -- Track when a player gets pinned by a Hunter
 function PlayerService:OnPlayerPinned(player: Player, attackerEntityId: string)
 	local char = player.Character
-	if not char then return end
-	
+	if not char then
+		return
+	end
+
 	-- Set pinned attributes
 	char:SetAttribute("IsPinned", true)
 	char:SetAttribute("PinnedBy", attackerEntityId)
-	
+
 	-- Track in service
 	if not self.PinnedPlayers then
 		self.PinnedPlayers = {}
@@ -367,39 +399,67 @@ function PlayerService:OnPlayerPinned(player: Player, attackerEntityId: string)
 		entityId = attackerEntityId,
 		pinnedAt = os.clock(),
 	}
-	
+
 	print(string.format("[PlayerService] %s pinned by entity %s", player.Name, attackerEntityId))
 end
 
 -- Get list of all currently pinned players
-function PlayerService:GetPinnedPlayers(): {Player}
+function PlayerService:GetPinnedPlayers(): { Player }
 	local pinned = {}
-	
+
 	for _, player in Players:GetPlayers() do
-		if self:IsPlayerPinned(player) then
+		if self:IsPlayerPinned(player) or self:IsPlayerGrabbed(player) then
 			table.insert(pinned, player)
 		end
 	end
-	
+
 	return pinned
 end
 
 -- Check if a player is pinned
 function PlayerService:IsPlayerPinned(player: Player): boolean
 	local char = player.Character
-	if not char then return false end
-	
+	if not char then
+		return false
+	end
+
 	return char:GetAttribute("IsPinned") == true
+end
+
+-- Check if a player is grabbed (Smoker)
+function PlayerService:IsPlayerGrabbed(player: Player): boolean
+	local char = player.Character
+	if not char then
+		return false
+	end
+
+	return char:GetAttribute("IsGrabbed") == true
 end
 
 -- Get the entity ID that is pinning a player
 function PlayerService:GetPinningEntityId(player: Player): string?
 	local char = player.Character
-	if not char then return nil end
-	
+	if not char then
+		return nil
+	end
+
 	local pinnedBy = char:GetAttribute("PinnedBy")
 	if pinnedBy then
 		return tostring(pinnedBy)
+	end
+	return nil
+end
+
+-- Get the entity ID that is grabbing a player (Smoker)
+function PlayerService:GetGrabbingEntityId(player: Player): string?
+	local char = player.Character
+	if not char then
+		return nil
+	end
+
+	local grabbedBy = char:GetAttribute("GrabbedBy")
+	if grabbedBy then
+		return tostring(grabbedBy)
 	end
 	return nil
 end
@@ -408,112 +468,124 @@ end
 -- RESCUE SYSTEM
 -- ============================================
 
-local RESCUE_RANGE = 4  -- studs
-local RESCUE_SHOVE_TIME = 0.5  -- seconds
+local RESCUE_RANGE = 4 -- studs
+local RESCUE_SHOVE_TIME = 0.5 -- seconds
 local RESCUE_DAMAGE_TO_HUNTER = 50
 
 -- Validate and perform rescue from pin
 function PlayerService:RescueFromPin(rescuer: Player, pinnedPlayer: Player): (boolean, string)
 	-- Validate rescuer exists and is alive
 	local rescuerChar = rescuer.Character
-	if not rescuerChar then 
+	if not rescuerChar then
 		return false, "Rescuer has no character"
 	end
-	
+
 	local rescuerHumanoid = rescuerChar:FindFirstChildOfClass("Humanoid")
 	if not rescuerHumanoid or rescuerHumanoid.Health <= 0 then
 		return false, "Rescuer is dead"
 	end
-	
+
 	-- Check rescuer state (must be Alive, not incapped)
 	local Services = script.Parent :: Instance
 	local GameService = require(Services:WaitForChild("GameService") :: any)
 	local gameService = GameService:Get()
-	
+
 	local rescuerData = gameService.PlayerData[rescuer]
 	if not rescuerData or rescuerData.state ~= "Alive" then
 		return false, "Rescuer is not in Alive state"
 	end
-	
+
 	-- Validate pinned player
 	local pinnedChar = pinnedPlayer.Character
 	if not pinnedChar then
 		return false, "Pinned player has no character"
 	end
-	
-	if not self:IsPlayerPinned(pinnedPlayer) then
-		return false, "Player is not pinned"
+
+	if not self:IsPlayerPinned(pinnedPlayer) and not self:IsPlayerGrabbed(pinnedPlayer) then
+		return false, "Player is not pinned or grabbed"
 	end
-	
+
 	-- Check distance
 	local rescuerHrp = rescuerChar:FindFirstChild("HumanoidRootPart")
 	local pinnedHrp = pinnedChar:FindFirstChild("HumanoidRootPart")
 	if not rescuerHrp or not pinnedHrp then
 		return false, "Missing HumanoidRootPart"
 	end
-	
+
 	local distance = (rescuerHrp.Position - pinnedHrp.Position).Magnitude
 	if distance > RESCUE_RANGE then
 		return false, string.format("Too far (%.1f studs, need %.1f)", distance, RESCUE_RANGE)
 	end
-	
+
 	-- Perform melee shove (0.5s action)
 	print(string.format("[PlayerService] %s performing rescue shove on Hunter...", rescuer.Name))
 	task.wait(RESCUE_SHOVE_TIME)
-	
+
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+
 	-- Get the Hunter entity and damage/stagger it
 	local pinnedBy = self:GetPinningEntityId(pinnedPlayer)
 	if pinnedBy then
-		local EntityService = require(Services:WaitForChild("EntityService") :: any)
 		local hunter = EntityService:Get():GetEntityById(pinnedBy)
-		
+
 		if hunter then
-			-- Damage the Hunter
 			if hunter.TakeDamage then
 				hunter:TakeDamage(RESCUE_DAMAGE_TO_HUNTER, rescuer)
 				print(string.format("[PlayerService] Hunter took %d damage from rescue shove", RESCUE_DAMAGE_TO_HUNTER))
 			end
-			
-			-- Force stagger state
+
 			if hunter.TransitionTo then
 				hunter:TransitionTo("Stagger")
 			end
-			
-			-- Call rescue method
+
 			if hunter.Rescue then
 				hunter:Rescue()
 			end
 		end
+
+		self:ClearPinnedState(pinnedPlayer)
+		print(string.format("[PlayerService] %s successfully rescued %s!", rescuer.Name, pinnedPlayer.Name))
+		return true, "Rescue successful"
 	end
-	
-	-- Clear pinned state
-	self:ClearPinnedState(pinnedPlayer)
-	
-	print(string.format("[PlayerService] %s successfully rescued %s!", rescuer.Name, pinnedPlayer.Name))
-	return true, "Rescue successful"
+
+	-- Smoker rescue
+	local grabbedBy = self:GetGrabbingEntityId(pinnedPlayer)
+	if grabbedBy then
+		local smoker = EntityService:Get():GetEntityById(grabbedBy)
+		if smoker and smoker.Rescue then
+			smoker:Rescue()
+		end
+
+		print(string.format("[PlayerService] %s successfully rescued %s!", rescuer.Name, pinnedPlayer.Name))
+		return true, "Rescue successful"
+	end
+
+	return false, "Rescue failed"
 end
 
 -- Clear pinned state from a player
 function PlayerService:ClearPinnedState(player: Player)
 	local char = player.Character
-	if not char then return end
-	
+	if not char then
+		return
+	end
+
 	-- Clear attributes
 	char:SetAttribute("IsPinned", false)
 	char:SetAttribute("PinnedBy", nil)
-	
+
 	-- Restore movement
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.WalkSpeed = 16
 		humanoid.JumpPower = 50
 	end
-	
+
 	-- Remove from tracking
 	if self.PinnedPlayers then
 		self.PinnedPlayers[player] = nil
 	end
-	
+
 	print(string.format("[PlayerService] Cleared pinned state for %s", player.Name))
 end
 
@@ -524,6 +596,52 @@ function PlayerService:RescuePinnedPlayer(rescuer: Player, victim: Player): bool
 		print(string.format("[PlayerService] Rescue failed: %s", message))
 	end
 	return success
+end
+
+-- ============================================
+-- DAMAGE FEEDBACK
+-- ============================================
+
+-- Send damage feedback to client with source position for directional indicators
+function PlayerService:SendDamageEvent(player: Player, damage: number, sourcePosition: Vector3?)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes then
+		return
+	end
+
+	local damageEvent = remotes:FindFirstChild("DamageEvent")
+	if damageEvent then
+		damageEvent:FireClient(player, damage, sourcePosition)
+	end
+end
+
+-- Apply damage to player from an entity (with source tracking for feedback)
+function PlayerService:DamagePlayer(player: Player, damage: number, sourcePosition: Vector3?)
+	local char = player.Character
+	if not char then
+		return
+	end
+
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return
+	end
+
+	-- Apply damage
+	humanoid:TakeDamage(damage)
+
+	-- Send damage event to client for visual feedback
+	self:SendDamageEvent(player, damage, sourcePosition)
+
+	-- Update GameService player data
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
+	local playerData = GameService:Get().PlayerData[player]
+	if playerData then
+		playerData.health = humanoid.Health
+	end
+
+	print(string.format("[PlayerService] %s took %.0f damage", player.Name, damage))
 end
 
 return PlayerService

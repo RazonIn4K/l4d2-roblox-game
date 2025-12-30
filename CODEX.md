@@ -1,6 +1,6 @@
-# CLAUDE.md
+# CODEX.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex CLI (OpenAI Codex) when working with code in this repository.
 
 ## Project Summary
 Building a Left 4 Dead 2-inspired cooperative horror/survival game in Roblox using Luau. The game features 4-player co-op, an AI Director pacing system, special infected enemies (Hunter, Smoker, Boomer, Tank, Witch, Charger, Spitter), incapacitation/revival mechanics, procedural room generation, and horror atmosphere systems.
@@ -265,9 +265,6 @@ Detailed implementation guides in `/docs/`:
 `Idle | Patrol | Chase | Attack | Stagger | Dead`
 
 Hunter-specific states: `Stalk | Crouch | Pounce | Pinning | Stunned`
-Smoker-specific states: `Idle | Stalk | Aim | Grab | Dragging | Stagger | Dead`
-Boomer-specific states: `Idle | Stalk | Approach | Vomit | Stagger | Dead`
-Tank-specific states: `Idle | Chase | Attack | ThrowRock | Rage | Stagger | Dead`
 
 ### Special Infected
 | Type | Mechanic | HP |
@@ -297,35 +294,20 @@ Primary, Secondary (Pistol, infinite), Throwable, Medical
 ## Test Commands (Chat)
 | Command | Action |
 |---------|--------|
-| `/start` | Start the game (transitions from Lobby to Playing) |
 | `/test` | Spawn 5 common zombies around player |
 | `/hunter` | Spawn a Hunter 20 studs in front |
-| `/smoker` | Spawn a Smoker 30 studs in front |
-| `/boomer` | Spawn a Boomer 20 studs in front |
-| `/tank` | Spawn a Tank 30 studs in front (boss!) |
-| `/witch` | Spawn a Witch 20 studs in front (don't startle her!) |
-| `/saferoom` | Trigger safe room benefits (heal, reset incap) |
 | `/kill` | Kill all enemies |
 | `/heal` | Heal player to full health |
 
 ## Current Implementation Status
 
 ### Completed Systems
-- **EntityService** - Single-script NPC management with update loop, bile attraction
-- **DirectorService** - AI Director with pacing states and client notifications
+- **EntityService** - Single-script NPC management with update loop
+- **DirectorService** - AI Director with pacing states
 - **WeaponService** - Pistol with server-authoritative hit detection
-- **PlayerService** - Health, incap, revival, rescue from pin/grab, damage events
+- **PlayerService** - Health, incap, revival, rescue from pin
 - **Hunter** - Full state machine (Stalk→Crouch→Pounce→Pinning)
-- **Smoker** - Tongue grab, drag mechanics (Stalk→Aim→Grab→Dragging)
-- **Boomer** - Explosion on death, bile vomit, bile attraction for common infected
-- **Tank** - Boss enemy with rock throwing, rage mode, frustration mechanic (6000 HP)
-- **Witch** - Avoidance enemy with startle mechanic, instant incap (1000 HP)
-- **UIController** - Health bar, teammate cards, incap overlay, death screen, game state notifications
-- **AmbientSoundController** - Horror atmosphere sounds, heartbeat on low health
-- **DamageFeedbackController** - Damage vignette, hit markers, directional indicators, camera shake
-- **HorrorLightingController** - Fog, color correction, flickering lights, intensity-based effects
-- **SafeRoomService** - Safe room zone detection, healing to 50 HP, incap reset
-- **Flashlight** - F key toggle for player flashlight
+- **UIController** - Health bar, teammate cards, incap overlay
 - **Test Environment** - 3-room layout with spawn points
 
 ### Test Environment Layout

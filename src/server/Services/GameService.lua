@@ -6,7 +6,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 -- Types
 export type GameState = "Lobby" | "Loading" | "Playing" | "SafeRoom" | "Finale" | "Victory" | "Failed"
@@ -129,6 +129,24 @@ function GameService:OnCharacterAdded(player: Player, character: Model)
 		end
 	end
 
+	-- Incapacitation check (intercepts lethal damage)
+	humanoid.HealthChanged:Connect(function(health)
+		local currentData = self.PlayerData[player]
+		if not currentData then
+			return
+		end
+		if currentData.state ~= "Alive" then
+			return
+		end
+		if health > 0 then
+			return
+		end
+
+		local Services = ServerScriptService:WaitForChild("Server"):WaitForChild("Services")
+		local PlayerService = require(Services:WaitForChild("PlayerService") :: any)
+		PlayerService:Get():IncapacitatePlayer(player)
+	end)
+
 	-- Death handler
 	humanoid.Died:Connect(function()
 		self:OnPlayerDied(player)
@@ -150,6 +168,9 @@ function GameService:OnPlayerDied(player: Player)
 	if not data then
 		return
 	end
+	if data.state == "Incapacitated" or data.state == "Dead" then
+		return
+	end
 
 	data.state = "Dead"
 	self.OnPlayerStateChanged:Fire(player, "Dead")
@@ -165,6 +186,25 @@ function GameService:SetState(newState: GameState)
 	self.State = newState
 	self.OnStateChanged:Fire(oldState, newState)
 	print("[GameService] State:", oldState, "->", newState)
+
+	-- Broadcast to all clients for UI notifications
+	self:BroadcastGameState(newState)
+end
+
+function GameService:BroadcastGameState(state: GameState)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes then
+		return
+	end
+
+	local gameStateRemote = remotes:FindFirstChild("GameState")
+	if not gameStateRemote then
+		return
+	end
+
+	-- Fire to all clients
+	gameStateRemote:FireAllClients(state, nil)
+	print("[GameService] Broadcasted game state:", state)
 end
 
 function GameService:GetPlayerCount(): number

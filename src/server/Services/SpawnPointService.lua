@@ -5,7 +5,6 @@
 ]]
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 
 -- Types
 export type SpawnType = "Common" | "Special" | "Ambient"
@@ -81,13 +80,18 @@ function SpawnPointService:RefreshSpawnPoints()
 	end
 
 	self._lastRefresh = os.clock()
-	print(string.format("[SpawnPointService] Found %d Common, %d Special, %d Ambient spawn points", 
-		#self._spawnPoints.Common, 
-		#self._spawnPoints.Special, 
-		#self._spawnPoints.Ambient))
+	print(
+		string.format(
+			"[SpawnPointService] Found %d Common, %d Special, %d Ambient spawn points",
+			#self._spawnPoints.Common,
+			#self._spawnPoints.Special,
+			#self._spawnPoints.Ambient
+		)
+	)
 end
 
-function SpawnPointService:IsPointVisible(position: Vector3): boolean
+function SpawnPointService:IsPointVisible(spawnPoint: BasePart): boolean
+	local position = spawnPoint.Position
 	-- Check if any player can see this position
 	for _, player in Players:GetPlayers() do
 		local char = player.Character
@@ -112,7 +116,7 @@ function SpawnPointService:IsPointVisible(position: Vector3): boolean
 		-- Raycast from player to spawn point
 		local rayParams = RaycastParams.new()
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		
+
 		-- Filter out players and their characters
 		local filterDescendants = {}
 		for _, p in Players:GetPlayers() do
@@ -125,6 +129,10 @@ function SpawnPointService:IsPointVisible(position: Vector3): boolean
 		local result = workspace:Raycast(origin, direction, rayParams)
 		if result == nil then
 			-- Clear line of sight - point is visible
+			return true
+		end
+		if result.Instance == spawnPoint then
+			-- Ray hit the spawn point itself
 			return true
 		end
 	end
@@ -166,8 +174,11 @@ end
 function SpawnPointService:IsBehindPlayer(spawnPoint: BasePart, playerPosition: Vector3, playerFacing: Vector3): boolean
 	-- Check if spawn point is behind player (dot product < 0)
 	local toSpawn = (spawnPoint.Position - playerPosition)
+	if toSpawn.Magnitude == 0 then
+		return false
+	end
 	local normalized = toSpawn.Unit
-	
+
 	-- Dot product: negative means behind player
 	return playerFacing:Dot(normalized) < 0
 end
@@ -188,7 +199,7 @@ function SpawnPointService:GetValidSpawnPoints(spawnType: string, count: number)
 	-- Get player positions and facing
 	local playerPositions = {} :: { Vector3 }
 	local playerFacings = {} :: { Vector3 }
-	
+
 	for _, player in Players:GetPlayers() do
 		local char = player.Character
 		if not char then
@@ -213,7 +224,6 @@ function SpawnPointService:GetValidSpawnPoints(spawnType: string, count: number)
 	local minDistance = spawnType == "Special" and CONFIG.minDistanceSpecial or CONFIG.minDistanceCommon
 
 	-- Filter valid spawn points
-	local validPoints = {} :: { BasePart }
 	local behindPoints = {} :: { BasePart }
 	local frontPoints = {} :: { BasePart }
 
@@ -237,7 +247,7 @@ function SpawnPointService:GetValidSpawnPoints(spawnType: string, count: number)
 		end
 
 		-- Check line of sight
-		if self:IsPointVisible(spawnPoint.Position) then
+		if self:IsPointVisible(spawnPoint) then
 			continue
 		end
 
@@ -264,7 +274,7 @@ function SpawnPointService:GetValidSpawnPoints(spawnType: string, count: number)
 	local frontCount = totalNeeded - behindCount
 
 	-- Select from behind points first (75%)
-	for i = 1, math.min(behindCount, #behindPoints) do
+	for _ = 1, math.min(behindCount, #behindPoints) do
 		local index = math.random(1, #behindPoints)
 		local point = behindPoints[index]
 		table.insert(selectedPoints, point.Position)
@@ -272,7 +282,7 @@ function SpawnPointService:GetValidSpawnPoints(spawnType: string, count: number)
 	end
 
 	-- Fill remaining from front points (25%)
-	for i = 1, math.min(frontCount, #frontPoints) do
+	for _ = 1, math.min(frontCount, #frontPoints) do
 		local index = math.random(1, #frontPoints)
 		local point = frontPoints[index]
 		table.insert(selectedPoints, point.Position)
@@ -307,4 +317,3 @@ function SpawnPointService:Destroy()
 end
 
 return SpawnPointService
-

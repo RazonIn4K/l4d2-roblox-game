@@ -5,8 +5,9 @@
     Based on L4D2's pacing system: BuildUp → SustainPeak → PeakFade → Relax
 ]]
 
-local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local _ServerScriptService = game:GetService("ServerScriptService")
 
 -- Import EntityFactory
@@ -97,7 +98,7 @@ function DirectorService:ConnectGameEvents()
 	local GameService = require(Services:WaitForChild("GameService") :: any)
 
 	-- Listen for game state changes
-	GameService:Get().OnStateChanged.Event:Connect(function(oldState, newState)
+	GameService:Get().OnStateChanged.Event:Connect(function(_oldState, newState)
 		if newState == "Playing" then
 			self:TransitionTo("Relax") -- Grace period at start
 			self.StateTimer = 5 -- 5-second timer for testing
@@ -108,11 +109,9 @@ function DirectorService:ConnectGameEvents()
 			self:TransitionTo("Idle")
 		end
 	end)
-	
-	-- Test trigger: Automatically transition to Playing state after 2 seconds
-	task.wait(2)
-	print("[Director] Test trigger: Transitioning to Playing state...")
-	GameService:Get():SetState("Playing")
+
+	-- Note: Game state transitions are handled by GameService
+	-- The Director responds to state changes via the OnStateChanged event above
 end
 
 function DirectorService:Update(dt: number)
@@ -150,7 +149,7 @@ end
 
 -- State Updates
 
-function DirectorService:UpdateBuildUp(dt: number)
+function DirectorService:UpdateBuildUp(_dt: number)
 	if self.Intensity >= CONFIG.peakThreshold then
 		self:TransitionTo("SustainPeak")
 		self.StateTimer = math.random(CONFIG.sustainPeakDurationMin, CONFIG.sustainPeakDurationMax)
@@ -164,7 +163,7 @@ function DirectorService:UpdateSustainPeak(dt: number)
 	end
 end
 
-function DirectorService:UpdatePeakFade(dt: number)
+function DirectorService:UpdatePeakFade(_dt: number)
 	if self.Intensity < CONFIG.peakThreshold * 0.5 then
 		self:TransitionTo("Relax")
 		self.StateTimer = math.random(CONFIG.relaxDurationMin, CONFIG.relaxDurationMax)
@@ -178,7 +177,7 @@ function DirectorService:UpdateRelax(dt: number)
 	end
 end
 
-function DirectorService:UpdateCrescendo(dt: number)
+function DirectorService:UpdateCrescendo(_dt: number)
 	-- Crescendo events are handled separately
 	-- This is for finale sequences
 end
@@ -188,6 +187,26 @@ function DirectorService:TransitionTo(newState: DirectorState)
 	self.State = newState
 	self.OnStateChanged:Fire(oldState, newState)
 	print(string.format("[Director] %s -> %s (Intensity: %.1f)", oldState, newState, self.Intensity))
+
+	-- Broadcast to clients for UI notifications (only specific states)
+	if newState == "BuildUp" or newState == "Crescendo" then
+		self:BroadcastDirectorState(newState)
+	end
+end
+
+function DirectorService:BroadcastDirectorState(state: DirectorState)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes then
+		return
+	end
+
+	local gameStateRemote = remotes:FindFirstChild("GameState")
+	if not gameStateRemote then
+		return
+	end
+
+	-- Fire director state to all clients
+	gameStateRemote:FireAllClients("DirectorState", state)
 end
 
 -- Intensity System
@@ -273,7 +292,7 @@ function DirectorService:UpdateTimers(dt: number)
 	end
 end
 
-function DirectorService:ProcessSpawning(dt: number)
+function DirectorService:ProcessSpawning(_dt: number)
 	-- Common infected waves
 	if self.CommonSpawnTimer <= 0 then
 		self:SpawnCommonWave()
@@ -284,7 +303,8 @@ function DirectorService:ProcessSpawning(dt: number)
 	for specialType, timer in self.SpecialTimers do
 		if timer <= 0 and self:CanSpawnSpecial(specialType) then
 			self:SpawnSpecial(specialType)
-			self.SpecialTimers[specialType] = math.random(CONFIG.specialSpawnIntervalMin, CONFIG.specialSpawnIntervalMax)
+			self.SpecialTimers[specialType] =
+				math.random(CONFIG.specialSpawnIntervalMin, CONFIG.specialSpawnIntervalMax)
 		end
 	end
 end
@@ -294,50 +314,80 @@ function DirectorService:SpawnCommonWave()
 	local Services = script.Parent :: Instance
 	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
-	
+
 	-- Get valid spawn points with 75% behind-players bias
 	local spawnPositions = SpawnPointService:Get():GetValidSpawnPoints("Common", 8)
-	
+
 	print(string.format("[Director] Found %d valid spawn points", #spawnPositions))
-	
+
 	if #spawnPositions == 0 then
 		warn("[Director] No valid spawn points found for common wave")
 		return
 	end
-	
+
 	-- Determine wave size: 5-10 zombies for BuildUp state
 	local waveSize = math.min(#spawnPositions, math.random(5, 10))
-	
+
 	print(string.format("[Director] Spawning wave of %d zombies", waveSize))
-	
+
 	-- Create zombie model once
 	local zombieModel = self:GetOrCreateZombieModel()
 	if not zombieModel then
 		warn("[Director] Failed to create zombie model")
 		return
 	end
-	
+
 	-- Spawn zombies at selected valid points
 	for i = 1, waveSize do
 		if i > #spawnPositions then
 			break
 		end
-		
+
 		local position = spawnPositions[i]
 		local entity = EntityService:Get():SpawnEntity(zombieModel, position)
-		
+
 		if entity then
-			print(string.format("[Entity] Spawned zombie #%d at position (%.1f, %.1f, %.1f)", 
-				i, position.X, position.Y, position.Z))
+			print(
+				string.format(
+					"[Entity] Spawned zombie #%d at position (%.1f, %.1f, %.1f)",
+					i,
+					position.X,
+					position.Y,
+					position.Z
+				)
+			)
 		else
-			warn(string.format("[Director] Failed to spawn zombie at position", tostring(position)))
+			warn(string.format("[Director] Failed to spawn zombie at position %s", tostring(position)))
 		end
 	end
 end
 
 function DirectorService:CanSpawnSpecial(specialType: string): boolean
-	-- TODO: Check active special count limits
-	return true
+	-- Get EntityService to count active specials
+	local Services = script.Parent :: Instance
+	local EntityService = require(Services:WaitForChild("EntityService") :: any)
+
+	-- Maximum active specials per type
+	local MAX_SPECIALS = {
+		Hunter = 2,
+		Smoker = 2,
+		Boomer = 1,
+		Tank = 1, -- Only one Tank at a time
+	}
+
+	local maxCount = MAX_SPECIALS[specialType] or 1
+
+	-- Count active specials of this type
+	local activeCount = 0
+	if EntityService:Get().SpecialEntities then
+		for _, entity in EntityService:Get().SpecialEntities do
+			if entity.Type == specialType and entity.State ~= "Dead" then
+				activeCount += 1
+			end
+		end
+	end
+
+	return activeCount < maxCount
 end
 
 function DirectorService:SpawnSpecial(specialType: string)
@@ -345,43 +395,59 @@ function DirectorService:SpawnSpecial(specialType: string)
 	local Services = script.Parent :: Instance
 	local EntityService = require(Services:WaitForChild("EntityService") :: any)
 	local SpawnPointService = require(Services:WaitForChild("SpawnPointService") :: any)
-	
+
 	-- Create special model
 	local specialModel = self:GetOrCreateSpecialModel(specialType)
 	if not specialModel then
 		warn("[Director] Failed to create special model:", specialType)
 		return
 	end
-	
+
 	-- Get valid spawn points (specials use "Special" type, minimum 40 studs away)
 	local spawnPositions = SpawnPointService:Get():GetValidSpawnPoints("Special", 1)
 	if #spawnPositions == 0 then
 		warn("[Director] No valid spawn points for special:", specialType)
 		return
 	end
-	
+
 	-- Use first valid position (already filtered for distance and visibility)
 	local spawnPosition = spawnPositions[1]
-	
-	-- Use specialized spawning for Hunter
+
+	-- Use specialized spawning for special infected with custom AI
 	if specialType == "Hunter" then
 		local hunter = EntityService:Get():SpawnHunter(specialModel, spawnPosition)
 		if hunter then
 			print(string.format("[Director] Spawned Hunter at %s", tostring(spawnPosition)))
 		end
 		return
+	elseif specialType == "Smoker" then
+		local smoker = EntityService:Get():SpawnSmoker(specialModel, spawnPosition)
+		if smoker then
+			print(string.format("[Director] Spawned Smoker at %s", tostring(spawnPosition)))
+		end
+		return
+	elseif specialType == "Boomer" then
+		local boomer = EntityService:Get():SpawnBoomer(specialModel, spawnPosition)
+		if boomer then
+			print(string.format("[Director] Spawned Boomer at %s", tostring(spawnPosition)))
+		end
+		return
+	elseif specialType == "Tank" then
+		local tank = EntityService:Get():SpawnTank(specialModel, spawnPosition)
+		if tank then
+			print(string.format("[Director] Spawned Tank at %s", tostring(spawnPosition)))
+		end
+		return
 	end
-	
-	-- Special configs for other types
+
+	-- Fall back to generic entity spawning for unimplemented specials
 	local specialConfigs = {
-		Smoker = { moveSpeed = 12, attackDamage = 5, detectionRadius = 45 },
-		Boomer = { moveSpeed = 8, attackDamage = 1, detectionRadius = 30 },
-		Tank = { moveSpeed = 10, attackDamage = 25, detectionRadius = 60 },
+		-- All specials now have dedicated spawners
 	}
-	
+
 	local config = specialConfigs[specialType] or {}
-	
-	-- Spawn the special
+
+	-- Spawn the special (uses base entity behavior)
 	local entity = EntityService:Get():SpawnEntity(specialModel, spawnPosition, config)
 	if entity then
 		print(string.format("[Director] Spawned %s at %s", specialType, tostring(spawnPosition)))
@@ -403,17 +469,17 @@ end
 -- Cleanup
 
 -- Model creation
-local zombieModelCache = {} :: {[string]: Model}
+local zombieModelCache = {} :: { [string]: Model }
 
 function DirectorService:GetOrCreateZombieModel(): Model?
 	if zombieModelCache["Common"] then
 		return zombieModelCache["Common"]
 	end
-	
+
 	-- Use EntityFactory to create model
 	local zombie = EntityFactory.createCommon()
 	zombieModelCache["Common"] = zombie
-	
+
 	print("[Director] Created common zombie model")
 	return zombie
 end
@@ -422,57 +488,52 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 	if zombieModelCache[specialType] then
 		return zombieModelCache[specialType]
 	end
-	
-	-- Use EntityFactory for Hunter
+
+	-- Use EntityFactory for special infected with dedicated models
 	if specialType == "Hunter" then
 		local hunterModel = EntityFactory.createHunter()
 		zombieModelCache["Hunter"] = hunterModel
 		print("[Director] Created Hunter model via EntityFactory")
 		return hunterModel
 	end
-	
-	-- Create a colored variant for other specials
+
+	if specialType == "Tank" then
+		local tankModel = EntityFactory.createTank()
+		zombieModelCache["Tank"] = tankModel
+		print("[Director] Created Tank model via EntityFactory")
+		return tankModel
+	end
+
+	if specialType == "Witch" then
+		local witchModel = EntityFactory.createWitch()
+		zombieModelCache["Witch"] = witchModel
+		print("[Director] Created Witch model via EntityFactory")
+		return witchModel
+	end
+
+	if specialType == "Smoker" then
+		local smokerModel = EntityFactory.createSmoker()
+		zombieModelCache["Smoker"] = smokerModel
+		print("[Director] Created Smoker model via EntityFactory")
+		return smokerModel
+	end
+
+	if specialType == "Boomer" then
+		local boomerModel = EntityFactory.createBoomer()
+		zombieModelCache["Boomer"] = boomerModel
+		print("[Director] Created Boomer model via EntityFactory")
+		return boomerModel
+	end
+
+	-- Fallback: Create a colored variant for unknown specials
 	local baseModel = self:GetOrCreateZombieModel()
 	if not baseModel then
 		return nil
 	end
-	
+
 	local specialModel = baseModel:Clone()
 	specialModel.Name = specialType
-	
-	-- Color based on type
-	local colors = {
-		Smoker = "Dark gray",
-		Boomer = "Bright green",
-		Tank = "Bright red",
-	}
-	
-	local color = colors[specialType] or "White"
-	for _, part in specialModel:GetDescendants() do
-		if part:IsA("BasePart") then
-			part.BrickColor = BrickColor.new(color)
-			-- Make specials larger
-			if specialType == "Tank" then
-				part.Size = part.Size * 1.5
-			elseif specialType == "Boomer" then
-				part.Size = part.Size * 1.2
-			end
-		end
-	end
-	
-	-- Update humanoid stats
-	local humanoid = specialModel:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		local health = {
-			Smoker = 250,
-			Boomer = 50,
-			Tank = 6000,
-		}
-		
-		humanoid.MaxHealth = health[specialType] or 100
-		humanoid.Health = health[specialType] or 100
-	end
-	
+
 	zombieModelCache[specialType] = specialModel
 	return specialModel
 end
@@ -482,7 +543,7 @@ function DirectorService:Destroy()
 		connection:Disconnect()
 	end
 	table.clear(self._connections)
-	
+
 	-- Clean up cached models
 	for _, model in zombieModelCache do
 		if model then
