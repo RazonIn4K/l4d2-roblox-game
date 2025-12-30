@@ -173,20 +173,21 @@ function Tank:TransitionTo(newState: TankState)
 end
 
 function Tank:OnStateEnter(newState: TankState, _oldState: TankState)
-	if newState == "Idle" then
-		self.Humanoid.WalkSpeed = 0
-	elseif newState == "Chase" then
+	-- Set movement speed based on state
+	if newState == "Chase" then
 		local speed = self.IsRaging and Tank.Config.rageSpeed or Tank.Config.moveSpeed
 		self.Humanoid.WalkSpeed = speed
-	elseif newState == "Attack" then
+	elseif newState ~= "Rage" and newState ~= "Dead" then
+		-- All other active states: stop moving (Idle, Attack, RockThrow, Stagger)
 		self.Humanoid.WalkSpeed = 0
-	elseif newState == "RockThrow" then
-		self.Humanoid.WalkSpeed = 0
+	end
+
+	-- State-specific actions
+	if newState == "RockThrow" then
 		self:ExecuteRockThrow()
 	elseif newState == "Rage" then
 		self:EnterRage()
 	elseif newState == "Stagger" then
-		self.Humanoid.WalkSpeed = 0
 		task.delay(0.8, function()
 			if self.State == "Stagger" then
 				self:TransitionTo("Chase")

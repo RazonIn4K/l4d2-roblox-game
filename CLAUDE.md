@@ -304,6 +304,8 @@ Primary, Secondary (Pistol, infinite), Throwable, Medical
 | `/boomer` | Spawn a Boomer 20 studs in front |
 | `/tank` | Spawn a Tank 30 studs in front (boss!) |
 | `/witch` | Spawn a Witch 20 studs in front (don't startle her!) |
+| `/charger` | Spawn a Charger 25 studs in front (watch the charge!) |
+| `/spitter` | Spawn a Spitter 30 studs in front (avoid the acid!) |
 | `/saferoom` | Trigger safe room benefits (heal, reset incap) |
 | `/kill` | Kill all enemies |
 | `/heal` | Heal player to full health |

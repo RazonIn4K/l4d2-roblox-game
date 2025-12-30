@@ -691,6 +691,82 @@ local function setupChatCommands()
 						)
 					)
 				end
+			elseif message == "/charger" then
+				-- Spawn a Charger near the player
+				local Services = script.Parent:WaitForChild("Services") :: Instance
+				local EntityService = require(Services:WaitForChild("EntityService") :: any)
+				local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
+
+				local character = player.Character
+				if not character then
+					return
+				end
+
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					return
+				end
+
+				-- Get Charger model
+				local chargerModel = DirectorService:Get():GetOrCreateSpecialModel("Charger")
+				if not chargerModel then
+					warn("[Test] Failed to create Charger model")
+					return
+				end
+
+				-- Spawn 25 studs in front of player
+				local spawnPos = hrp.Position + hrp.CFrame.LookVector * 25
+				local charger = EntityService:Get():SpawnCharger(chargerModel, spawnPos)
+
+				if charger then
+					print(
+						string.format(
+							"[Test] Spawned CHARGER for %s at (%.1f, %.1f, %.1f) - Watch out for the charge!",
+							player.Name,
+							spawnPos.X,
+							spawnPos.Y,
+							spawnPos.Z
+						)
+					)
+				end
+			elseif message == "/spitter" then
+				-- Spawn a Spitter near the player
+				local Services = script.Parent:WaitForChild("Services") :: Instance
+				local EntityService = require(Services:WaitForChild("EntityService") :: any)
+				local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
+
+				local character = player.Character
+				if not character then
+					return
+				end
+
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					return
+				end
+
+				-- Get Spitter model
+				local spitterModel = DirectorService:Get():GetOrCreateSpecialModel("Spitter")
+				if not spitterModel then
+					warn("[Test] Failed to create Spitter model")
+					return
+				end
+
+				-- Spawn 30 studs in front of player
+				local spawnPos = hrp.Position + hrp.CFrame.LookVector * 30
+				local spitter = EntityService:Get():SpawnSpitter(spitterModel, spawnPos)
+
+				if spitter then
+					print(
+						string.format(
+							"[Test] Spawned SPITTER for %s at (%.1f, %.1f, %.1f) - Avoid the acid!",
+							player.Name,
+							spawnPos.X,
+							spawnPos.Y,
+							spawnPos.Z
+						)
+					)
+				end
 			end
 		end)
 	end)
