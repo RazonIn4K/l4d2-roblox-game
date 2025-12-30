@@ -350,46 +350,180 @@ local function setupWorkspace()
 	print("[Server] Created 7 spawn points (6 Common, 1 Special)")
 	
 	-- ============================================
-	-- SAFE ROOM TRIGGER DETECTION
+	-- SAFE ROOM TRIGGER DETECTION & HEALING
 	-- ============================================
 	local Players = game:GetService("Players")
+	local RunService = game:GetService("RunService")
 	
-	safeZone.Touched:Connect(function(hit)
-		local character = hit:FindFirstAncestorOfClass("Model")
-		if not character then return end
+	-- Safe room bounds (half-size for checking)
+	local SAFE_ROOM_HALF_X = 15
+	local SAFE_ROOM_HALF_Z = 15
+	local SAFE_ROOM_HEAL_RATE = 5 -- HP per second
+	local SAFE_ROOM_CHECK_INTERVAL = 0.5 -- Check every 0.5 seconds
+	
+	local lastSafeRoomCheck = 0
+	local isInSafeRoom = false
+	local lastHealTime = 0
+	
+	-- Heartbeat loop for safe room detection and healing
+	RunService.Heartbeat:Connect(function(dt)
+		local currentTime = os.clock()
 		
-		local player = Players:GetPlayerFromCharacter(character)
-		if not player then return end
+		-- Throttle safe room checks
+		if currentTime - lastSafeRoomCheck < SAFE_ROOM_CHECK_INTERVAL then
+			return
+		end
+		lastSafeRoomCheck = currentTime
+		
+		local allPlayers = Players:GetPlayers()
+		if #allPlayers == 0 then
+			return
+		end
 		
 		-- Check if all players are in safe room
 		local allInSafeRoom = true
-		local playersInSafeRoom = 0
-		local totalPlayers = #Players:GetPlayers()
+		local playersInSafeRoom = {} :: { Player }
 		
-		for _, p in Players:GetPlayers() do
-			local char = p.Character
-			if char then
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					-- Check if inside safe room bounds
-					local relPos = hrp.Position - SAFE_ROOM_CENTER
-					if math.abs(relPos.X) <= 15 and math.abs(relPos.Z) <= 15 then
-						playersInSafeRoom += 1
-					else
-						allInSafeRoom = false
+		for _, player in allPlayers do
+			local char = player.Character
+			if not char then
+				allInSafeRoom = false
+				continue
+			end
+			
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			if not hrp then
+				allInSafeRoom = false
+				continue
+			end
+			
+			-- Check if inside safe room bounds
+			local relPos = hrp.Position - SAFE_ROOM_CENTER
+			local inBounds = math.abs(relPos.X) <= SAFE_ROOM_HALF_X 
+				and math.abs(relPos.Z) <= SAFE_ROOM_HALF_Z
+				and relPos.Y >= -5 and relPos.Y <= WALL_HEIGHT + 5
+			
+			if inBounds then
+				table.insert(playersInSafeRoom, player)
+			else
+				allInSafeRoom = false
+			end
+		end
+		
+		-- State change detection
+		if allInSafeRoom and not isInSafeRoom then
+			-- Entering safe room
+			isInSafeRoom = true
+			
+			-- Notify DirectorService (wait for services to be ready)
+			local Services = script.Parent:FindFirstChild("Services")
+			if Services then
+				local success, DirectorService = pcall(function()
+					return require(Services:WaitForChild("DirectorService") :: any)
+				end)
+				
+				if success and DirectorService then
+					if DirectorService:Get().State ~= "SafeRoom" then
+						DirectorService:Get():EnterSafeRoom()
+						print("[Server] All players in Safe Room! Entering safe state.")
+					end
+				end
+				
+				-- Notify GameService
+				local success2, GameService = pcall(function()
+					return require(Services:WaitForChild("GameService") :: any)
+				end)
+				
+				if success2 and GameService then
+					if GameService:Get().State ~= "SafeRoom" then
+						GameService:Get():SetState("SafeRoom")
+					end
+				end
+			end
+		elseif not allInSafeRoom and isInSafeRoom then
+			-- Exiting safe room
+			isInSafeRoom = false
+			
+			local Services = script.Parent:FindFirstChild("Services")
+			if Services then
+				local success, DirectorService = pcall(function()
+					return require(Services:WaitForChild("DirectorService") :: any)
+				end)
+				
+				if success and DirectorService then
+					if DirectorService:Get().State == "SafeRoom" then
+						DirectorService:Get():ExitSafeRoom()
+						print("[Server] Players left Safe Room. Exiting safe state.")
+					end
+				end
+				
+				-- Only exit SafeRoom game state if we're actually playing
+				local success2, GameService = pcall(function()
+					return require(Services:WaitForChild("GameService") :: any)
+				end)
+				
+				if success2 and GameService then
+					if GameService:Get().State == "SafeRoom" then
+						GameService:Get():SetState("Playing")
 					end
 				end
 			end
 		end
 		
-		if allInSafeRoom and totalPlayers > 0 then
-			-- Notify DirectorService
-			local Services = script.Parent:FindFirstChild("Services")
-			if Services then
-				local DirectorService = require(Services:WaitForChild("DirectorService") :: any)
-				if DirectorService:Get().State ~= "SafeRoom" then
-					DirectorService:Get():EnterSafeRoom()
-					print("[Server] All players in Safe Room! Entering safe state.")
+		-- Healing logic (only when all players are in safe room)
+		if allInSafeRoom and isInSafeRoom then
+			local healInterval = 1.0 -- Heal every second
+			if currentTime - lastHealTime >= healInterval then
+				lastHealTime = currentTime
+				
+				-- Heal all players in safe room
+				local Services = script.Parent:FindFirstChild("Services")
+				if not Services then
+					return -- Services not ready yet
+				end
+				
+				local success, GameService = pcall(function()
+					return require(Services:WaitForChild("GameService") :: any)
+				end)
+				
+				if not success or not GameService then
+					return -- GameService not ready
+				end
+				
+				for _, player in playersInSafeRoom do
+					local char = player.Character
+					if not char then continue end
+					
+					local humanoid = char:FindFirstChildOfClass("Humanoid")
+					if not humanoid then continue end
+					
+					-- Get player data from GameService
+					local playerData = GameService:Get().PlayerData[player]
+					
+					if playerData and playerData.state == "Alive" then
+						-- Heal up to max health
+						local newHealth = math.min(
+							humanoid.MaxHealth,
+							humanoid.Health + SAFE_ROOM_HEAL_RATE
+						)
+						humanoid.Health = newHealth
+						playerData.health = newHealth
+					elseif playerData and playerData.state == "Incapacitated" then
+						-- Revive incapacitated players in safe room
+						-- Clear incap state and restore to alive
+						playerData.state = "Alive"
+						playerData.health = 50 -- Restore to 50 HP
+						playerData.incapCount = 0 -- Reset incap count
+						
+						-- Restore character
+						char:SetAttribute("IsIncapacitated", false)
+						humanoid.WalkSpeed = 16
+						humanoid.JumpPower = 50
+						humanoid.MaxHealth = 100
+						humanoid.Health = 50
+						
+						print(string.format("[Server] %s revived in Safe Room", player.Name))
+					end
 				end
 			end
 		end
