@@ -10,6 +10,7 @@ roblox.lock
 Packages/
 DevPackages/
 wally.lock
+ServerPackages/
 
 # Build artifacts
 build/
