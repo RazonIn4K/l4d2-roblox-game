@@ -516,9 +516,11 @@ function DirectorService:GetOrCreateZombieModel(): Model?
 
 	-- Use EntityFactory to create model
 	local zombie = EntityFactory.createCommon()
+	-- Mark as template to prevent accidental direct use
+	zombie:SetAttribute("IsTemplate", true)
 	zombieModelCache["Common"] = zombie
 
-	print("[Director] Created common zombie model")
+	print("[Director] Created common zombie model (template)")
 	return zombie
 end
 
@@ -530,50 +532,57 @@ function DirectorService:GetOrCreateSpecialModel(specialType: string): Model?
 	-- Use EntityFactory for special infected with dedicated models
 	if specialType == "Hunter" then
 		local hunterModel = EntityFactory.createHunter()
+		hunterModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Hunter"] = hunterModel
-		print("[Director] Created Hunter model via EntityFactory")
+		print("[Director] Created Hunter model via EntityFactory (template)")
 		return hunterModel
 	end
 
 	if specialType == "Tank" then
 		local tankModel = EntityFactory.createTank()
+		tankModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Tank"] = tankModel
-		print("[Director] Created Tank model via EntityFactory")
+		print("[Director] Created Tank model via EntityFactory (template)")
 		return tankModel
 	end
 
 	if specialType == "Witch" then
 		local witchModel = EntityFactory.createWitch()
+		witchModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Witch"] = witchModel
-		print("[Director] Created Witch model via EntityFactory")
+		print("[Director] Created Witch model via EntityFactory (template)")
 		return witchModel
 	end
 
 	if specialType == "Smoker" then
 		local smokerModel = EntityFactory.createSmoker()
+		smokerModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Smoker"] = smokerModel
-		print("[Director] Created Smoker model via EntityFactory")
+		print("[Director] Created Smoker model via EntityFactory (template)")
 		return smokerModel
 	end
 
 	if specialType == "Boomer" then
 		local boomerModel = EntityFactory.createBoomer()
+		boomerModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Boomer"] = boomerModel
-		print("[Director] Created Boomer model via EntityFactory")
+		print("[Director] Created Boomer model via EntityFactory (template)")
 		return boomerModel
 	end
 
 	if specialType == "Charger" then
 		local chargerModel = EntityFactory.createCharger()
+		chargerModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Charger"] = chargerModel
-		print("[Director] Created Charger model via EntityFactory")
+		print("[Director] Created Charger model via EntityFactory (template)")
 		return chargerModel
 	end
 
 	if specialType == "Spitter" then
 		local spitterModel = EntityFactory.createSpitter()
+		spitterModel:SetAttribute("IsTemplate", true)
 		zombieModelCache["Spitter"] = spitterModel
-		print("[Director] Created Spitter model via EntityFactory")
+		print("[Director] Created Spitter model via EntityFactory (template)")
 		return spitterModel
 	end
 

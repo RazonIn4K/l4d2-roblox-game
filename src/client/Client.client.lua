@@ -24,13 +24,23 @@ local UIController = require(script.Parent:WaitForChild("Controllers"):WaitForCh
 -- Constants
 local RESCUE_RANGE = 4 -- Must match server
 
--- State
-local rescuePrompt: BillboardGui? = nil
-local nearbyPinnedPlayer: Player? = nil
-local currentAmmo = { magazine = 15, reserve = math.huge, weapon = "Pistol" }
-local ammoLabel: TextLabel? = nil
-local flashlightEnabled = false
-local flashlight: SpotLight? = nil
+-- Unified Game State (consolidates all client state)
+local GameState = {
+	gameState = "Lobby", -- Lobby | Loading | Playing | SafeRoom | Finale | Victory | Failed
+	playerHealth = {}, -- { [playerId] = health }
+	entities = {}, -- { [entityId] = { pos, type, state } }
+	ammo = { magazine = 15, reserve = math.huge, weapon = "Pistol" },
+	-- Legacy state (kept for backward compatibility)
+	rescuePrompt = nil :: BillboardGui?,
+	nearbyPinnedPlayer = nil :: Player?,
+	currentAmmo = { magazine = 15, reserve = math.huge, weapon = "Pistol" },
+	ammoLabel = nil :: TextLabel?,
+	flashlightEnabled = false,
+	flashlight = nil :: SpotLight?,
+}
+
+-- Convenience aliases for backward compatibility (using GameState directly)
+local currentAmmo = GameState.currentAmmo
 
 -- ============================================
 -- AMMO DISPLAY UI
@@ -71,12 +81,16 @@ local function createAmmoDisplay(): TextLabel
 end
 
 local function updateAmmoDisplay()
-	if not ammoLabel then
-		ammoLabel = createAmmoDisplay()
+	if not GameState.ammoLabel then
+		GameState.ammoLabel = createAmmoDisplay()
 	end
 
-	local reserveText = currentAmmo.reserve == math.huge and "∞" or tostring(currentAmmo.reserve)
-	ammoLabel.Text = string.format("%d / %s", currentAmmo.magazine, reserveText)
+	-- Use unified state
+	local ammo = GameState.ammo
+	local reserveText = ammo.reserve == math.huge and "∞" or tostring(ammo.reserve)
+	if GameState.ammoLabel then
+		GameState.ammoLabel.Text = string.format("%d / %s", ammo.magazine, reserveText)
+	end
 end
 
 -- ============================================
@@ -115,16 +129,18 @@ local function toggleFlashlight()
 	end
 
 	-- Create flashlight if it doesn't exist or was destroyed
-	if not flashlight or not flashlight.Parent then
-		flashlight = createFlashlight()
-		if not flashlight then
+	if not GameState.flashlight or not GameState.flashlight.Parent then
+		GameState.flashlight = createFlashlight()
+		if not GameState.flashlight then
 			return
 		end
 	end
 
 	-- Toggle state
-	flashlightEnabled = not flashlightEnabled
-	flashlight.Enabled = flashlightEnabled
+	GameState.flashlightEnabled = not GameState.flashlightEnabled
+	if GameState.flashlight then
+		GameState.flashlight.Enabled = GameState.flashlightEnabled
+	end
 
 	-- Play click sound
 	local sound = Instance.new("Sound")
@@ -134,7 +150,7 @@ local function toggleFlashlight()
 	sound:Play()
 	Debris:AddItem(sound, 1)
 
-	print(string.format("[Client] Flashlight %s", flashlightEnabled and "ON" or "OFF"))
+	print(string.format("[Client] Flashlight %s", GameState.flashlightEnabled and "ON" or "OFF"))
 end
 
 -- ============================================
@@ -230,7 +246,7 @@ end
 
 local function fireWeapon()
 	-- Check if we have ammo (client-side prediction)
-	if currentAmmo.magazine <= 0 then
+	if GameState.ammo.magazine <= 0 then
 		-- Play empty click sound
 		return
 	end
@@ -244,17 +260,19 @@ local function fireWeapon()
 	createMuzzleFlash()
 	playGunshotSound()
 
-	-- Client-side ammo prediction
-	currentAmmo.magazine -= 1
+	-- Client-side ammo prediction (optimistic update)
+	local predictedMagazine = GameState.ammo.magazine - 1
+	GameState.ammo.magazine = predictedMagazine
+	currentAmmo.magazine = predictedMagazine -- Sync legacy state
 	updateAmmoDisplay()
 
-	-- Send to server
+	-- Send to server (server will validate and reconcile)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local fireWeaponRemote = remotes:WaitForChild("FireWeapon")
 	fireWeaponRemote:FireServer(targetPosition)
 end
 
--- Create rescue prompt UI
+-- Create rescue prompt UI (uses unified state)
 local function createRescuePrompt(): BillboardGui
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "RescuePrompt"
@@ -336,29 +354,32 @@ end
 
 -- Update rescue prompt visibility
 local function updateRescuePrompt()
-	if not rescuePrompt then
-		rescuePrompt = createRescuePrompt()
+	if not GameState.rescuePrompt then
+		GameState.rescuePrompt = createRescuePrompt()
 	end
 
-	nearbyPinnedPlayer = findNearbyPinnedPlayer()
+	GameState.nearbyPinnedPlayer = findNearbyPinnedPlayer()
 
-	if nearbyPinnedPlayer then
-		local pinnedChar = nearbyPinnedPlayer.Character
+	if GameState.nearbyPinnedPlayer and GameState.rescuePrompt then
+		local pinnedChar = GameState.nearbyPinnedPlayer.Character
 		if pinnedChar then
-			rescuePrompt.Adornee = pinnedChar:FindFirstChild("Head") or pinnedChar.PrimaryPart
-			rescuePrompt.Enabled = true
+			local headOrPart: Instance? = pinnedChar:FindFirstChild("Head") or pinnedChar.PrimaryPart
+			if headOrPart then
+				GameState.rescuePrompt.Adornee = headOrPart :: Instance
+			end
+			GameState.rescuePrompt.Enabled = true
 
-			local label = rescuePrompt:FindFirstChild("Background", true)
+			local label = GameState.rescuePrompt:FindFirstChild("Background", true)
 			if label then
 				local textLabel = label:FindFirstChild("PromptText") :: TextLabel?
 				if textLabel then
-					textLabel.Text = string.format("Press E to rescue %s", nearbyPinnedPlayer.Name)
+					textLabel.Text = string.format("Press E to rescue %s", GameState.nearbyPinnedPlayer.Name)
 				end
 			end
 		end
-	else
-		rescuePrompt.Enabled = false
-		rescuePrompt.Adornee = nil
+	elseif GameState.rescuePrompt then
+		GameState.rescuePrompt.Enabled = false
+		GameState.rescuePrompt.Adornee = nil
 	end
 end
 
@@ -387,17 +408,55 @@ end
 -- Setup remotes
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 
--- Game state updates
+-- Unified State Update Handler (consolidates all state updates)
+local function updateGameState(stateUpdate: { [string]: any })
+	-- Update game state
+	if stateUpdate.gameState then
+		GameState.gameState = stateUpdate.gameState
+		print("[Client] Game state:", stateUpdate.gameState)
+		-- TODO: Update UI based on state
+	end
+	
+	-- Update player health
+	if stateUpdate.playerHealth then
+		for playerId, health in pairs(stateUpdate.playerHealth) do
+			GameState.playerHealth[playerId] = health
+		end
+	end
+	
+	-- Update entities
+	if stateUpdate.entities then
+		for entityId, entityData in pairs(stateUpdate.entities) do
+			GameState.entities[entityId] = entityData
+		end
+		-- TODO: Update entity visuals
+	end
+	
+	-- Update ammo (reconciles client prediction with server authority)
+	if stateUpdate.ammo then
+		GameState.ammo.magazine = stateUpdate.ammo.magazine or GameState.ammo.magazine
+		GameState.ammo.reserve = stateUpdate.ammo.reserve or GameState.ammo.reserve
+		GameState.ammo.weapon = stateUpdate.ammo.weapon or GameState.ammo.weapon
+		-- Sync to legacy state
+		currentAmmo.magazine = GameState.ammo.magazine
+		currentAmmo.reserve = GameState.ammo.reserve
+		currentAmmo.weapon = GameState.ammo.weapon
+		updateAmmoDisplay()
+	end
+end
+
+-- Game state updates (unified handler)
 local gameStateRemote = remotes:WaitForChild("GameState")
 gameStateRemote.OnClientEvent:Connect(function(state)
-	print("[Client] Game state:", state)
-	-- TODO: Update UI based on state
+	updateGameState({ gameState = state })
 end)
 
--- Entity updates
+-- Entity updates (legacy - kept for backward compatibility)
 local entityUpdateRemote = remotes:WaitForChild("EntityUpdate")
-entityUpdateRemote.OnClientEvent:Connect(function(_updates)
-	-- TODO: Update entity visuals
+entityUpdateRemote.OnClientEvent:Connect(function(updates)
+	if updates then
+		updateGameState({ entities = updates })
+	end
 end)
 
 -- Rescue remote
@@ -410,14 +469,14 @@ attemptRescueRemote.OnClientEvent:Connect(function(success: boolean, message: st
 	end
 end)
 
--- Ammo update remote
+-- Ammo update remote (reconciles client prediction with server authority)
 local ammoUpdateRemote = remotes:WaitForChild("AmmoUpdate")
 ammoUpdateRemote.OnClientEvent:Connect(function(ammoData)
 	if ammoData then
-		currentAmmo.magazine = ammoData.magazine or currentAmmo.magazine
-		currentAmmo.reserve = ammoData.reserve or currentAmmo.reserve
-		currentAmmo.weapon = ammoData.weapon or currentAmmo.weapon
-		updateAmmoDisplay()
+		updateGameState({ ammo = ammoData })
+		print(string.format("[Client] Ammo reconciled: %d/%s", 
+			ammoData.magazine or 0, 
+			ammoData.reserve == math.huge and "∞" or tostring(ammoData.reserve)))
 	end
 end)
 
@@ -455,9 +514,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	-- E key for interaction/revive/rescue
 	if input.KeyCode == Enum.KeyCode.E then
 		-- Check for nearby pinned players first
-		if nearbyPinnedPlayer then
-			print(string.format("[Client] Attempting to rescue %s", nearbyPinnedPlayer.Name))
-			attemptRescueRemote:FireServer(nearbyPinnedPlayer)
+		if GameState.nearbyPinnedPlayer then
+			print(string.format("[Client] Attempting to rescue %s", GameState.nearbyPinnedPlayer.Name))
+			attemptRescueRemote:FireServer(GameState.nearbyPinnedPlayer)
 			return
 		end
 

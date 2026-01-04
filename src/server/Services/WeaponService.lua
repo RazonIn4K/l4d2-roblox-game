@@ -179,16 +179,26 @@ function WeaponService:OnFireWeapon(player: Player, targetPosition: Vector3)
 		return -- Silent reject - too fast
 	end
 
-	-- Check ammo
+	-- Check ammo (server-authoritative validation)
 	if weaponState.magazine <= 0 then
 		-- Send empty click feedback
+		print(string.format("[WeaponService] %s attempted to fire with no ammo (magazine: %d, reserve: %d)", 
+			player.Name, weaponState.magazine, weaponState.reserve))
 		self:SendFireResult(player, false, "NoAmmo")
+		-- Send current ammo state to reconcile client prediction
+		self:SendAmmoUpdate(player)
 		return
 	end
 
 	-- Update fire time and ammo
 	weaponState.lastFireTime = now
+	local previousMagazine = weaponState.magazine
 	weaponState.magazine -= 1
+	
+	-- Log ammo consumption for debugging
+	print(string.format("[WeaponService] %s fired %s (ammo: %d/%d -> %d/%d)", 
+		player.Name, weaponState.currentWeapon, previousMagazine, weaponState.reserve, 
+		weaponState.magazine, weaponState.reserve))
 
 	-- Perform server-side raycast
 	local hitResult = self:PerformRaycast(player, targetPosition, weaponData)

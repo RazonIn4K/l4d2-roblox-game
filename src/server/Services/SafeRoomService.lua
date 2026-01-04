@@ -135,17 +135,19 @@ function SafeRoomService:UpdateZoneDetection()
 			if hrp and self:IsPositionInZone(hrp.Position) then
 				playersNowInside[player] = true
 
-				-- Player just entered
-				if not self.PlayersInside[player] then
-					self:OnPlayerEnterSafeRoom(player)
-				end
-			else
-				-- Player just left
-				if self.PlayersInside[player] then
-					self:OnPlayerExitSafeRoom(player)
-				end
-				allInside = false
+			-- Player just entered
+			if not self.PlayersInside[player] then
+				print(string.format("[SafeRoomService] %s entered safe room", player.Name))
+				self:OnPlayerEnterSafeRoom(player)
 			end
+		else
+			-- Player just left
+			if self.PlayersInside[player] then
+				print(string.format("[SafeRoomService] %s exited safe room", player.Name))
+				self:OnPlayerExitSafeRoom(player)
+			end
+			allInside = false
+		end
 		end
 	end
 
