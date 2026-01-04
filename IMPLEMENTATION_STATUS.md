@@ -28,19 +28,20 @@
   - Tongue grab from 50 studs, drag mechanics, beam visual
   - Test command: `/smoker`
 
+- **Boomer**: ✅ Complete
+  - States: Idle → Chase → Vomit → Attack → Stagger → Dead
+  - Explosion on death, bile application, horde attraction
+  - Bile system: 2.5x detection range, no LOS required
+  - DirectorService integration: spawns extra horde when player biled
+  - Test command: `/boomer`
+
 ### UI
 - **UIController**: Health bar, teammate cards, incap overlay
 
 ## 🚧 In Progress / Next Steps
 
 ### High Priority
-1. **Boomer Implementation**
-   - Explosion on death
-   - Bile application system
-   - Horde attraction via DirectorService
-   - Test command: `/boomer` (already exists)
-
-2. **Testing & Bug Fixes**
+1. **Testing & Bug Fixes**
    - Test all systems in Studio
    - Verify safe room healing
    - Test Smoker tongue grab mechanics
@@ -76,16 +77,17 @@
 | `/test` | Spawn 5 common zombies around player |
 | `/hunter` | Spawn a Hunter 20 studs in front |
 | `/smoker` | Spawn a Smoker 30 studs in front |
-| `/boomer` | Spawn a Boomer (when implemented) |
+| `/boomer` | Spawn a Boomer 15 studs in front |
 | `/kill` | Kill all enemies |
 | `/heal` | Heal player to full health |
 
 ## 🎯 Current Focus
 
-**Next Implementation**: Boomer Special Infected
-- Simpler than Hunter/Smoker
-- Adds variety to gameplay
-- Tests DirectorService horde attraction system
+**Next Implementation**: Testing & Polish
+- Test all special infected (Hunter, Smoker, Boomer)
+- Verify bile system and horde attraction
+- Test safe room mechanics
+- Improve common infected AI behavior
 
 ## 📊 Code Quality
 
