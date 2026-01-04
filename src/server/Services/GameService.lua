@@ -203,7 +203,7 @@ function GameService:BroadcastGameState(state: GameState)
 	end
 
 	-- Fire to all clients
-	gameStateRemote:FireAllClients(state, nil)
+	gameStateRemote:FireAllClients(state)
 	print("[GameService] Broadcasted game state:", state)
 end
 

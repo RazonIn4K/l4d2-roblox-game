@@ -138,7 +138,17 @@ function EntityService:Update(dt: number)
 
 	-- Update special entities (Hunter, etc.)
 	if self.SpecialEntities then
-		for _, specialEntity in self.SpecialEntities do
+		for id, specialEntity in self.SpecialEntities do
+			-- Skip if entity is dead or destroyed
+			if not specialEntity or not specialEntity.Model or not specialEntity.Model.Parent then
+				self.SpecialEntities[id] = nil
+				continue
+			end
+			
+			if specialEntity.State == "Dead" then
+				continue
+			end
+			
 			if specialEntity.Update then
 				specialEntity:Update(dt)
 			end

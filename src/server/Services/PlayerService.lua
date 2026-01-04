@@ -123,8 +123,8 @@ function PlayerService:Update(dt: number)
 end
 
 function PlayerService:IncapacitatePlayer(player: Player)
-	local Services = ServerScriptService.Server.Services
-	local GameService = require(Services.GameService)
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
 	local gameService = GameService:Get()
 
 	local data = gameService.PlayerData[player]
@@ -172,8 +172,8 @@ function PlayerService:StartBleedout(player: Player)
 	end
 
 	self.BleedoutTasks[player] = task.spawn(function()
-		local Services = ServerScriptService.Server.Services
-		local GameService = require(Services.GameService)
+		local Services = script.Parent :: Instance
+		local GameService = require(Services:WaitForChild("GameService") :: any)
 		local gameService = GameService:Get()
 
 		while true do
@@ -206,8 +206,8 @@ function PlayerService:StartBleedout(player: Player)
 end
 
 function PlayerService:StartRevive(rescuer: Player, incapped: Player)
-	local Services = ServerScriptService.Server.Services
-	local GameService = require(Services.GameService)
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
 	local gameService = GameService:Get()
 
 	local rescuerData = gameService.PlayerData[rescuer]
@@ -294,8 +294,8 @@ end
 function PlayerService:CompleteRevive(player: Player)
 	self.ActiveRevives[player] = nil
 
-	local Services = ServerScriptService.Server.Services
-	local GameService = require(Services.GameService)
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
 	local gameService = GameService:Get()
 
 	local data = gameService.PlayerData[player]
@@ -331,8 +331,8 @@ function PlayerService:CompleteRevive(player: Player)
 end
 
 function PlayerService:KillPlayer(player: Player)
-	local Services = ServerScriptService.Server.Services
-	local GameService = require(Services.GameService)
+	local Services = script.Parent :: Instance
+	local GameService = require(Services:WaitForChild("GameService") :: any)
 	local gameService = GameService:Get()
 
 	local data = gameService.PlayerData[player]

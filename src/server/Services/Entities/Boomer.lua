@@ -503,6 +503,19 @@ function Boomer:Die()
 	self.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
 	task.delay(3, function()
+		-- Remove from EntityService tracking
+		local Services = script.Parent.Parent :: Instance
+		local success, EntityService = pcall(function()
+			return require(Services:WaitForChild("EntityService") :: any)
+		end)
+		
+		if success and EntityService then
+			local entityId = self.Model:GetAttribute("EntityId")
+			if entityId and EntityService:Get().SpecialEntities then
+				EntityService:Get().SpecialEntities[tostring(entityId)] = nil
+			end
+		end
+		
 		self:Destroy()
 	end)
 end
