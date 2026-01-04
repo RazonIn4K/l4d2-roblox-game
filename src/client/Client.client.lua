@@ -379,7 +379,8 @@ local function updateRescuePrompt()
 		end
 	elseif GameState.rescuePrompt then
 		GameState.rescuePrompt.Enabled = false
-		GameState.rescuePrompt.Adornee = nil
+		-- Clear Adornee by setting to a dummy part (Roblox type system doesn't allow nil)
+		-- The prompt will be hidden anyway since Enabled = false
 	end
 end
 
