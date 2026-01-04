@@ -241,6 +241,20 @@ function DirectorService:AddIntensity(event: string, value: number?)
 	end
 end
 
+-- Called when a player is biled - spawn extra horde
+function DirectorService:OnPlayerBiled(player: Player)
+	print(string.format("[Director] Player %s is biled - spawning extra horde!", player.Name))
+	
+	-- Spawn an immediate wave of common infected
+	-- This happens regardless of current state
+	if self.State ~= "Idle" and self.State ~= "SafeRoom" then
+		self:SpawnCommonWave()
+	end
+	
+	-- Increase intensity slightly
+	self:AddIntensity("specialSpotted")
+end
+
 function DirectorService:DecayIntensity(dt: number)
 	if not self._inCombat then
 		local oldIntensity = self.Intensity

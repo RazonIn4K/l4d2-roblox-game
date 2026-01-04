@@ -87,12 +87,7 @@ function Spitter.new(model: Model)
 			end
 
 			-- Thin limbs
-			if
-				part.Name:find("Arm")
-				or part.Name:find("Leg")
-				or part.Name:find("Upper")
-				or part.Name:find("Lower")
-			then
+			if part.Name:find("Arm") or part.Name:find("Leg") or part.Name:find("Upper") or part.Name:find("Lower") then
 				part.Size = part.Size * Vector3.new(0.7, 1, 0.7)
 			end
 		end

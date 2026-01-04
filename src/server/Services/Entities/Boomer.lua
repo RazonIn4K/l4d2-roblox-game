@@ -360,6 +360,16 @@ function Boomer:ApplyBile(player: Player)
 
 	print(string.format("[Boomer] %s is covered in bile!", player.Name))
 
+	-- Notify DirectorService to spawn extra horde
+	local Services = script.Parent.Parent :: Instance
+	local success, DirectorService = pcall(function()
+		return require(Services:WaitForChild("DirectorService") :: any)
+	end)
+	
+	if success and DirectorService then
+		DirectorService:Get():OnPlayerBiled(player)
+	end
+
 	-- Clear bile after duration
 	task.delay(Boomer.Config.bileDuration, function()
 		if char and char.Parent then
