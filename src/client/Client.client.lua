@@ -471,13 +471,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Initialize ammo display
-updateAmmoDisplay()
-
--- Initialize controllers
+-- Initialize controllers first
 UIController:Get():Start()
 AmbientSoundController:Get():Start()
 DamageFeedbackController:Get():Start()
 HorrorLightingController:Get():Start()
+
+-- Initialize ammo display after controllers (ensures remotes are ready)
+updateAmmoDisplay()
 
 print("[Client] Initialized")

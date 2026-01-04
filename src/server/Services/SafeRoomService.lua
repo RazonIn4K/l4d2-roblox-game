@@ -65,14 +65,30 @@ end
 
 function SafeRoomService:FindSafeRoomZones()
 	-- Look for safe room zone parts in workspace
+	-- First check TestEnvironment folder (created by setupWorkspace)
+	local testEnv = workspace:FindFirstChild("TestEnvironment")
+	if testEnv then
+		-- Look for part with SafeRoomZone attribute
+		for _, child in testEnv:GetDescendants() do
+			if child:IsA("BasePart") and child:GetAttribute("SafeRoomZone") == true then
+				self.SafeRoomZone = child
+				print("[SafeRoomService] Found SafeRoomZone in TestEnvironment")
+				return
+			end
+		end
+	end
+	
+	-- Fallback: Look for safe room folder
 	local safeRoomFolder = workspace:FindFirstChild("SafeRoom")
 	if not safeRoomFolder then
-		-- Try to find a part named SafeRoomZone
+		-- Try to find a part named SafeRoomZone recursively
 		local zone = workspace:FindFirstChild("SafeRoomZone", true)
 		if zone and zone:IsA("BasePart") then
 			self.SafeRoomZone = zone
-			print("[SafeRoomService] Found SafeRoomZone")
+			print("[SafeRoomService] Found SafeRoomZone (recursive search)")
+			return
 		end
+		warn("[SafeRoomService] SafeRoomZone not found! Safe room features will not work.")
 		return
 	end
 
@@ -82,7 +98,9 @@ function SafeRoomService:FindSafeRoomZones()
 	self.ExitDoor = safeRoomFolder:FindFirstChild("ExitDoor") :: BasePart?
 
 	if self.SafeRoomZone then
-		print("[SafeRoomService] Found safe room zone")
+		print("[SafeRoomService] Found safe room zone in SafeRoom folder")
+	else
+		warn("[SafeRoomService] SafeRoomZone not found in SafeRoom folder!")
 	end
 end
 

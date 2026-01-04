@@ -136,24 +136,39 @@ function EntityService:Update(dt: number)
 		self:UpdateEntity(entity, dt)
 	end
 
-	-- Update special entities (Hunter, etc.)
-	if self.SpecialEntities then
-		for id, specialEntity in self.SpecialEntities do
-			-- Skip if entity is dead or destroyed
-			if not specialEntity or not specialEntity.Model or not specialEntity.Model.Parent then
-				self.SpecialEntities[id] = nil
-				continue
-			end
-			
-			if specialEntity.State == "Dead" then
-				continue
-			end
-			
-			if specialEntity.Update then
-				specialEntity:Update(dt)
+		-- Update special entities (Hunter, etc.)
+		if self.SpecialEntities then
+			for id, specialEntity in self.SpecialEntities do
+				-- Skip if entity is dead or destroyed
+				if not specialEntity or not specialEntity.Model or not specialEntity.Model.Parent then
+					self.SpecialEntities[id] = nil
+					continue
+				end
+				
+				if specialEntity.State == "Dead" then
+					-- Call cleanup method if available
+					if specialEntity.Destroy then
+						pcall(function()
+							specialEntity:Destroy()
+						end)
+					end
+					self.SpecialEntities[id] = nil
+					continue
+				end
+				
+				-- Defensive nil-check and type validation before Update call
+				if specialEntity and typeof(specialEntity.Update) == "function" then
+					local ok, err = pcall(function()
+						specialEntity:Update(dt)
+					end)
+					if not ok then
+						warn(string.format("[EntityService] Error updating special entity (ID %s): %s", id, tostring(err)))
+						-- Mark for cleanup but don't crash
+						self.SpecialEntities[id] = nil
+					end
+				end
 			end
 		end
-	end
 end
 
 function EntityService:UpdateEntity(entity: Entity, _dt: number)
